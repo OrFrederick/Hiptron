@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Data
+data/*.duckdb
+data/*.duckdb.wal
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
