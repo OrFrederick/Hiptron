@@ -17,11 +17,17 @@ from hiptron.synthetic.scenarios import Scenario
 @pytest.fixture(scope="module")
 def insight_db(tmp_path_factory):
     import duckdb
+
     scenario = Scenario(
-        user_id="u1", seed=7, weeks=10,
-        home_lat=52.52, home_lon=13.40,
-        outings_per_day=2, mean_outing_distance_m=1200.0,
-        distance_decline_pct_per_week=12.0, decline_start_week=5,
+        user_id="u1",
+        seed=7,
+        weeks=10,
+        home_lat=52.52,
+        home_lon=13.40,
+        outings_per_day=2,
+        mean_outing_distance_m=1200.0,
+        distance_decline_pct_per_week=12.0,
+        decline_start_week=5,
     )
     db_path = tmp_path_factory.mktemp("insight") / "i.duckdb"
     con = duckdb.connect(str(db_path))
@@ -60,10 +66,7 @@ def test_changepoint_produces_two_audience_insights(insight_db):
 
 def test_insight_payload_includes_baseline_and_current(insight_db):
     payload_json = insight_db.execute(
-        "SELECT payload_json FROM insights "
-        "WHERE audience = 'older_adult' LIMIT 1"
+        "SELECT payload_json FROM insights WHERE audience = 'older_adult' LIMIT 1"
     ).fetchone()[0]
     payload = json.loads(payload_json)
-    assert {
-        "feature", "direction", "baseline_mean", "current_value", "pct_delta"
-    } <= payload.keys()
+    assert {"feature", "direction", "baseline_mean", "current_value", "pct_delta"} <= payload.keys()

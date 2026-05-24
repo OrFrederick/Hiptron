@@ -20,6 +20,7 @@ TRACKED_FEATURES = {
 @pytest.fixture(scope="module")
 def baseline_db(tmp_path_factory):
     import duckdb
+
     db_path = tmp_path_factory.mktemp("baselines") / "b.duckdb"
     con = duckdb.connect(str(db_path))
     apply_schema(con)
@@ -35,16 +36,10 @@ def baseline_db(tmp_path_factory):
 
 def test_baselines_skip_first_4_weeks(baseline_db):
     earliest = baseline_db.execute("SELECT min(date) FROM daily_features").fetchone()[0]
-    earliest_baseline = baseline_db.execute(
-        "SELECT min(window_end) FROM baselines"
-    ).fetchone()[0]
+    earliest_baseline = baseline_db.execute("SELECT min(window_end) FROM baselines").fetchone()[0]
     assert (earliest_baseline - earliest).days >= 27
 
 
 def test_each_tracked_feature_has_baselines(baseline_db):
-    feats = {
-        r[0] for r in baseline_db.execute(
-            "SELECT DISTINCT feature FROM baselines"
-        ).fetchall()
-    }
+    feats = {r[0] for r in baseline_db.execute("SELECT DISTINCT feature FROM baselines").fetchall()}
     assert TRACKED_FEATURES.issubset(feats)

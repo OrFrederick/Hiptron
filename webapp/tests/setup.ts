@@ -6,4 +6,5 @@ class ResizeObserverStub {
   unobserve() {}
   disconnect() {}
 }
-(globalThis as unknown as Record<string, unknown>).ResizeObserver = ResizeObserverStub;
+(globalThis as unknown as Record<string, unknown>).ResizeObserver =
+  ResizeObserverStub;

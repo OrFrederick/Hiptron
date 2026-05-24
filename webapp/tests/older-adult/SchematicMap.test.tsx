@@ -9,13 +9,23 @@ describe("SchematicMap", () => {
       <SchematicMap
         map={{
           home_lat: 52.52,
-          home_lon: 13.40,
+          home_lon: 13.4,
           places: [
-            { place_id: "p1", label: "bakery", centroid_lat: 52.521, centroid_lon: 13.4006 },
-            { place_id: "p2", label: "park", centroid_lat: 52.5198, centroid_lon: 13.4012 },
+            {
+              place_id: "p1",
+              label: "bakery",
+              centroid_lat: 52.521,
+              centroid_lon: 13.4006,
+            },
+            {
+              place_id: "p2",
+              label: "park",
+              centroid_lat: 52.5198,
+              centroid_lon: 13.4012,
+            },
           ],
           walk_polyline: [
-            [52.52, 13.40],
+            [52.52, 13.4],
             [52.5205, 13.4002],
             [52.521, 13.4006],
           ],

@@ -1,6 +1,8 @@
 import { Card } from "../../../shared/Card";
 
-interface Props { note: string | null; }
+interface Props {
+  note: string | null;
+}
 
 export function FamilyNoteCard({ note }: Props) {
   if (!note) return null;

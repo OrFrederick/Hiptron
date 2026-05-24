@@ -1,9 +1,14 @@
 import { useMemo } from "react";
 
 import { Card } from "../../shared/Card";
-import type { Place, SchematicMap as SchematicMapType } from "../../shared/types";
+import type {
+  Place,
+  SchematicMap as SchematicMapType,
+} from "../../shared/types";
 
-interface Props { map: SchematicMapType; }
+interface Props {
+  map: SchematicMapType;
+}
 
 const VIEW_SIZE = 300;
 const PADDING = 24;
@@ -13,13 +18,22 @@ export function SchematicMap({ map }: Props) {
 
   return (
     <Card ariaLabel="Schematic map of your week">
-      <p className="text-warm-800/70 text-sm uppercase tracking-wide mb-2">Your map</p>
+      <p className="text-warm-800/70 text-sm uppercase tracking-wide mb-2">
+        Your map
+      </p>
       <svg
         viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`}
         className="w-full h-auto"
         role="img"
       >
-        <rect x="0" y="0" width={VIEW_SIZE} height={VIEW_SIZE} fill="#FBF7F2" rx="16" />
+        <rect
+          x="0"
+          y="0"
+          width={VIEW_SIZE}
+          height={VIEW_SIZE}
+          fill="#FBF7F2"
+          rx="16"
+        />
         <polyline
           aria-label="walk path"
           points={polyline.map(([x, y]) => `${x},${y}`).join(" ")}
@@ -59,7 +73,10 @@ export function SchematicMap({ map }: Props) {
 function projectPoints(map: SchematicMapType) {
   const all: [number, number][] = [
     [map.home_lat, map.home_lon],
-    ...map.places.map((p): [number, number] => [p.centroid_lat, p.centroid_lon]),
+    ...map.places.map((p): [number, number] => [
+      p.centroid_lat,
+      p.centroid_lon,
+    ]),
     ...map.walk_polyline,
   ];
   const lats = all.map(([la]) => la);

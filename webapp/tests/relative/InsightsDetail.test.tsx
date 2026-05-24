@@ -77,7 +77,9 @@ describe("Insights Detail", () => {
       expect(screen.getByText(/How far is Helga going/i)).toBeInTheDocument(),
     );
     expect(screen.getByText(/Distance is steady/)).toBeInTheDocument();
-    expect(screen.queryByText(/Are walks getting harder/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Are walks getting harder/i),
+    ).not.toBeInTheDocument();
     expect(screen.getByText(/Nothing has changed enough/i)).toBeInTheDocument();
   });
 });

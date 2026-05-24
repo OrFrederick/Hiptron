@@ -28,10 +28,15 @@ def steady_db(tmp_path_factory):
 @pytest.fixture(scope="module")
 def decline_db(tmp_path_factory):
     decline = Scenario(
-        user_id="helga", seed=7, weeks=10,
-        home_lat=52.52, home_lon=13.40,
-        outings_per_day=2, mean_outing_distance_m=1200.0,
-        distance_decline_pct_per_week=20.0, decline_start_week=4,
+        user_id="helga",
+        seed=7,
+        weeks=10,
+        home_lat=52.52,
+        home_lon=13.40,
+        outings_per_day=2,
+        mean_outing_distance_m=1200.0,
+        distance_decline_pct_per_week=20.0,
+        decline_start_week=4,
     )
     return _full_run(tmp_path_factory.mktemp("decline"), decline)
 
@@ -39,9 +44,13 @@ def decline_db(tmp_path_factory):
 @pytest.fixture(scope="module")
 def fatigue_db(tmp_path_factory):
     fatigue = Scenario(
-        user_id="helga", seed=3, weeks=10,
-        home_lat=52.52, home_lon=13.40,
-        outings_per_day=2, mean_outing_distance_m=1200.0,
+        user_id="helga",
+        seed=3,
+        weeks=10,
+        home_lat=52.52,
+        home_lon=13.40,
+        outings_per_day=2,
+        mean_outing_distance_m=1200.0,
         fatigue_onset_week=5,
     )
     return _full_run(tmp_path_factory.mktemp("fatigue"), fatigue)
@@ -50,9 +59,13 @@ def fatigue_db(tmp_path_factory):
 @pytest.fixture(scope="module")
 def shrink_db(tmp_path_factory):
     shrink = Scenario(
-        user_id="helga", seed=21, weeks=10,
-        home_lat=52.52, home_lon=13.40,
-        outings_per_day=2, mean_outing_distance_m=1200.0,
+        user_id="helga",
+        seed=21,
+        weeks=10,
+        home_lat=52.52,
+        home_lon=13.40,
+        outings_per_day=2,
+        mean_outing_distance_m=1200.0,
         place_repertoire_shrink=True,
     )
     return _full_run(tmp_path_factory.mktemp("shrink"), shrink)
@@ -80,9 +93,9 @@ def test_fatigue_scenario_surfaces_in_insights(fatigue_db: Path):
 
 def test_place_shrink_pipeline_runs(shrink_db: Path):
     ro = open_db(shrink_db, read_only=True)
-    n_cp = ro.execute(
-        "SELECT count(*) FROM changepoints WHERE feature = 'place_count'"
-    ).fetchone()[0]
+    n_cp = ro.execute("SELECT count(*) FROM changepoints WHERE feature = 'place_count'").fetchone()[
+        0
+    ]
     n_daily = ro.execute("SELECT count(*) FROM daily_features").fetchone()[0]
     ro.close()
     assert n_daily > 0

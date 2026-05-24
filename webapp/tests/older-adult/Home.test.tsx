@@ -16,7 +16,10 @@ const fakeHome = {
     place_labels: ["bakery", "park"],
   },
   schematic_map: {
-    home_lat: 52.52, home_lon: 13.40, places: [], walk_polyline: [[52.52, 13.40]],
+    home_lat: 52.52,
+    home_lon: 13.4,
+    places: [],
+    walk_polyline: [[52.52, 13.4]],
   },
   streak_days: 5,
   family_note: "Anna sent a heart for your walk yesterday",
@@ -44,7 +47,9 @@ beforeEach(() => {
 describe("Older-Adult Home", () => {
   it("shows greeting, distance, streak, family note", async () => {
     renderHome();
-    await waitFor(() => expect(screen.getByText(/Good morning/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Good morning/i)).toBeInTheDocument(),
+    );
     expect(screen.getByText(/1\.45 km/)).toBeInTheDocument();
     expect(screen.getByText(/5 days in a row/i)).toBeInTheDocument();
     expect(screen.getByText(/Anna sent a heart/i)).toBeInTheDocument();

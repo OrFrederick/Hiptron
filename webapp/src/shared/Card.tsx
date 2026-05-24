@@ -8,7 +8,8 @@ interface Props {
 }
 
 export function Card({ children, className = "", onTap, ariaLabel }: Props) {
-  const base = "rounded-3xl bg-warm-100 p-5 shadow-sm border border-warm-200 transition";
+  const base =
+    "rounded-3xl bg-warm-100 p-5 shadow-sm border border-warm-200 transition";
   const tappable = onTap ? "active:scale-[0.99] cursor-pointer" : "";
   if (onTap) {
     return (

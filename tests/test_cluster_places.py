@@ -11,6 +11,7 @@ from hiptron.synthetic.scenarios import BASELINE_SCENARIO
 @pytest.fixture(scope="module")
 def clustered_db(tmp_path_factory):
     import duckdb
+
     db_path = tmp_path_factory.mktemp("cluster") / "c.duckdb"
     con = duckdb.connect(str(db_path))
     apply_schema(con)
@@ -28,7 +29,5 @@ def test_finds_named_clusters(clustered_db):
 
 
 def test_visits_recorded(clustered_db):
-    n_visits = clustered_db.execute(
-        "SELECT count(*) FROM walk_place_visits"
-    ).fetchone()[0]
+    n_visits = clustered_db.execute("SELECT count(*) FROM walk_place_visits").fetchone()[0]
     assert n_visits > 0

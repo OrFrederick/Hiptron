@@ -12,6 +12,7 @@ from hiptron.synthetic.scenarios import BASELINE_SCENARIO
 @pytest.fixture(scope="module")
 def daily_db(tmp_path_factory):
     import duckdb
+
     db_path = tmp_path_factory.mktemp("daily") / "d.duckdb"
     con = duckdb.connect(str(db_path))
     apply_schema(con)

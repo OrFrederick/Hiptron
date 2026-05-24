@@ -4,5 +4,7 @@ interface Props {
 }
 
 export function Sentence({ text, className = "" }: Props) {
-  return <p className={`text-lg leading-snug text-warm-800 ${className}`}>{text}</p>;
+  return (
+    <p className={`text-lg leading-snug text-warm-800 ${className}`}>{text}</p>
+  );
 }

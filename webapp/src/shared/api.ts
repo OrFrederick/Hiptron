@@ -13,20 +13,23 @@ async function fetchJson<T>(url: string): Promise<T> {
 export function useOlderAdultHome(userId: string = DEFAULT_USER) {
   return useQuery({
     queryKey: ["older-adult-home", userId],
-    queryFn: () => fetchJson<OlderAdultHome>(`/api/older-adult/home?user_id=${userId}`),
+    queryFn: () =>
+      fetchJson<OlderAdultHome>(`/api/older-adult/home?user_id=${userId}`),
   });
 }
 
 export function useRelativeHome(userId: string = DEFAULT_USER) {
   return useQuery({
     queryKey: ["relative-home", userId],
-    queryFn: () => fetchJson<RelativeHome>(`/api/relative/home?user_id=${userId}`),
+    queryFn: () =>
+      fetchJson<RelativeHome>(`/api/relative/home?user_id=${userId}`),
   });
 }
 
 export function useRelativeInsights(userId: string = DEFAULT_USER) {
   return useQuery({
     queryKey: ["relative-insights", userId],
-    queryFn: () => fetchJson<InsightsDetail>(`/api/relative/insights?user_id=${userId}`),
+    queryFn: () =>
+      fetchJson<InsightsDetail>(`/api/relative/insights?user_id=${userId}`),
   });
 }

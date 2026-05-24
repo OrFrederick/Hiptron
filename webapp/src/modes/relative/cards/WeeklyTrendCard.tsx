@@ -1,12 +1,19 @@
 import {
-  Bar, BarChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis,
+  Bar,
+  BarChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
 } from "recharts";
 
 import { Card } from "../../../shared/Card";
 import { Sentence } from "../../../shared/Sentence";
 import type { WeeklyTrend } from "../../../shared/types";
 
-interface Props { trend: WeeklyTrend; }
+interface Props {
+  trend: WeeklyTrend;
+}
 
 export function WeeklyTrendCard({ trend }: Props) {
   const data = trend.points.map((p) => ({

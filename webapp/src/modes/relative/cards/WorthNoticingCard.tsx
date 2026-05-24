@@ -2,12 +2,16 @@ import { Card } from "../../../shared/Card";
 import { Sentence } from "../../../shared/Sentence";
 import type { WorthNoticing } from "../../../shared/types";
 
-interface Props { item: WorthNoticing; }
+interface Props {
+  item: WorthNoticing;
+}
 
 export function WorthNoticingCard({ item }: Props) {
   return (
     <Card className="border-amber-500 border-2">
-      <p className="text-amber-500 text-sm uppercase tracking-wide mb-1">Worth noticing</p>
+      <p className="text-amber-500 text-sm uppercase tracking-wide mb-1">
+        Worth noticing
+      </p>
       <Sentence text={item.headline} className="font-medium" />
       <p className="text-warm-800/80 text-sm mt-2">{item.detail}</p>
       <div className="flex gap-2 mt-3">

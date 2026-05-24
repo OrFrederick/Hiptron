@@ -12,7 +12,8 @@ export default function OlderAdultHome() {
   const { data, isLoading, isError } = useOlderAdultHome();
 
   if (isLoading) return <FullScreenMessage text="Loading your day…" />;
-  if (isError || !data) return <FullScreenMessage text="Something went quiet. Try again later." />;
+  if (isError || !data)
+    return <FullScreenMessage text="Something went quiet. Try again later." />;
 
   return (
     <main className="min-h-screen bg-warm-50 py-6 px-4 max-w-md mx-auto flex flex-col gap-4">

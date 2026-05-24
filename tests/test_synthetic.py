@@ -46,13 +46,9 @@ def test_scenario_with_distance_decline_shows_lower_late_distance(tmp_db):
 def test_generator_is_deterministic_with_seed(tmp_db):
     apply_schema(tmp_db)
     generate(BASELINE_SCENARIO, tmp_db)
-    rows_a = tmp_db.execute(
-        "SELECT lat, lon FROM gps_fixes ORDER BY ts LIMIT 100"
-    ).fetchall()
+    rows_a = tmp_db.execute("SELECT lat, lon FROM gps_fixes ORDER BY ts LIMIT 100").fetchall()
 
     tmp_db.execute("DELETE FROM gps_fixes")
     generate(BASELINE_SCENARIO, tmp_db)
-    rows_b = tmp_db.execute(
-        "SELECT lat, lon FROM gps_fixes ORDER BY ts LIMIT 100"
-    ).fetchall()
+    rows_b = tmp_db.execute("SELECT lat, lon FROM gps_fixes ORDER BY ts LIMIT 100").fetchall()
     assert rows_a == rows_b

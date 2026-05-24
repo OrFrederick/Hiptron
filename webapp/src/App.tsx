@@ -27,11 +27,15 @@ function ModeChooser() {
         <Link
           className="rounded-2xl bg-moss-600 text-white px-6 py-4 text-center text-lg"
           to="/older-adult"
-        >Older-Adult mode</Link>
+        >
+          Older-Adult mode
+        </Link>
         <Link
           className="rounded-2xl border-2 border-moss-600 text-moss-600 px-6 py-4 text-center text-lg"
           to="/relative"
-        >Relative mode</Link>
+        >
+          Relative mode
+        </Link>
       </div>
     </main>
   );

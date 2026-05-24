@@ -31,8 +31,13 @@ def test_run_all_stages_in_order(seeded_db):
 
 def test_stage_list_complete():
     expected = [
-        "segment_walks", "walk_features", "cluster_places",
-        "daily_aggregate", "baselines", "changepoints", "insights",
+        "segment_walks",
+        "walk_features",
+        "cluster_places",
+        "daily_aggregate",
+        "baselines",
+        "changepoints",
+        "insights",
     ]
     assert list(STAGES.keys()) == expected
 
@@ -44,9 +49,19 @@ def test_cli_runs_single_stage(tmp_path):
     generate(BASELINE_SCENARIO, con)
     con.close()
     result = subprocess.run(
-        [sys.executable, "-m", "hiptron.pipeline", "run",
-         "--db", str(db_path), "--stage", "segment_walks"],
-        capture_output=True, text=True, check=True,
+        [
+            sys.executable,
+            "-m",
+            "hiptron.pipeline",
+            "run",
+            "--db",
+            str(db_path),
+            "--stage",
+            "segment_walks",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
     )
     assert "segment_walks" in result.stdout
     ro = open_db(db_path, read_only=True)

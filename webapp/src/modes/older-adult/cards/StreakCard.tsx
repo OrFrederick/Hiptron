@@ -1,6 +1,8 @@
 import { Card } from "../../../shared/Card";
 
-interface Props { days: number; }
+interface Props {
+  days: number;
+}
 
 export function StreakCard({ days }: Props) {
   if (days <= 0) return null;

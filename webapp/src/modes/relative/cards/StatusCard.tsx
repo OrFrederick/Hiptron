@@ -27,8 +27,12 @@ export function StatusCard({ status, summary, lastUpdate }: Props) {
           <button
             type="button"
             className="rounded-2xl bg-warm-200 px-4 py-2 text-warm-800"
-            onClick={(e) => { e.preventDefault(); }}
-          >♥ Send</button>
+            onClick={(e) => {
+              e.preventDefault();
+            }}
+          >
+            ♥ Send
+          </button>
         </div>
       </Card>
     </Link>

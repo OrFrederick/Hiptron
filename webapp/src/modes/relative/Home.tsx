@@ -7,7 +7,8 @@ import { WorthNoticingCard } from "./cards/WorthNoticingCard";
 export default function RelativeHome() {
   const { data, isLoading, isError } = useRelativeHome();
   if (isLoading) return <Loading />;
-  if (isError || !data) return <Loading text="Couldn't load — try again later." />;
+  if (isError || !data)
+    return <Loading text="Couldn't load — try again later." />;
   return (
     <main className="min-h-screen bg-warm-50 py-6 px-4 max-w-md mx-auto flex flex-col gap-4">
       <StatusCard

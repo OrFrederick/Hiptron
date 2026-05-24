@@ -24,11 +24,15 @@ describe("useOlderAdultHome", () => {
   });
 
   it("fetches from /api/older-adult/home", async () => {
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={qc}>{children}</QueryClientProvider>
     );
-    const { result } = renderHook(() => useOlderAdultHome("helga"), { wrapper });
+    const { result } = renderHook(() => useOlderAdultHome("helga"), {
+      wrapper,
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.greeting).toBe("Good morning");
     expect(fetch).toHaveBeenCalledWith(
