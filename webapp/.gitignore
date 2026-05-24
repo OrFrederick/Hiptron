@@ -1,0 +1,8 @@
+node_modules/
+dist/
+tsconfig.tsbuildinfo
+pnpm-build-allow.json
+pnpm-workspace.yaml
+# tsc emits .js next to .tsx when no outDir is set (only happens with `tsc -b`; vite handles actual bundling)
+src/**/*.js
+tests/**/*.js
