@@ -11,8 +11,9 @@ TRACKED_FEATURES = (
     "fatigue_index",
     "place_count",
 )
-SUSTAINED_DAYS = 3
-THRESHOLD_SIGMAS = 2.0
+SUSTAINED_DAYS = 4
+THRESHOLD_SIGMAS = 1.9
+THRESHOLD_SIGMAS_UP = 4.5
 
 
 def detect_changepoints(con: duckdb.DuckDBPyConnection) -> None:
@@ -64,11 +65,11 @@ def _cusum_for(
         z = (value - mean) / std
         pos = max(0.0, pos + z - 0.5)
         neg = min(0.0, neg + z + 0.5)
-        if z < -1.0:
+        if z < -0.5:
             sustained_down += 1
         else:
             sustained_down = 0
-        if z > 1.0:
+        if z > 0.5:
             sustained_up += 1
         else:
             sustained_up = 0
@@ -85,7 +86,7 @@ def _cusum_for(
             pos = neg = 0.0
             sustained_down = 0
         elif (
-            pos > THRESHOLD_SIGMAS
+            pos > THRESHOLD_SIGMAS_UP
             and sustained_up >= SUSTAINED_DAYS
             and (last_fired is None or (date - last_fired).days > 14)
         ):

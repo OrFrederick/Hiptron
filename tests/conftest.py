@@ -1,7 +1,25 @@
+import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import duckdb
 import pytest
+
+# Pin datetime.now() so that Scenario.end() is deterministic across test runs.
+_FROZEN_NOW = datetime.datetime(2026, 5, 24, 12, 0, 0)
+
+
+class _FrozenDatetime(datetime.datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return _FROZEN_NOW if tz is None else _FROZEN_NOW.replace(tzinfo=tz)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def freeze_datetime_now():
+    """Replace datetime.now() in scenarios module with a fixed value for reproducibility."""
+    with patch("hiptron.synthetic.scenarios.datetime", _FrozenDatetime):
+        yield
 
 
 @pytest.fixture
