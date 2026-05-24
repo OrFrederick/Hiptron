@@ -1,9 +1,12 @@
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 
+import OlderAdultHome from "./modes/older-adult/Home";
+
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<ModeChooser />} />
+      <Route path="/older-adult" element={<OlderAdultHome />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

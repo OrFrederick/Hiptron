@@ -1,0 +1,39 @@
+import { Link } from "react-router-dom";
+
+import { useOlderAdultHome } from "../../shared/api";
+import { GreetingCard } from "./cards/GreetingCard";
+import { YesterdayWalkCard } from "./cards/YesterdayWalkCard";
+import { StreakCard } from "./cards/StreakCard";
+import { FamilyNoteCard } from "./cards/FamilyNoteCard";
+import { TrendCard } from "./cards/TrendCard";
+import { SchematicMap } from "./SchematicMap";
+
+export default function OlderAdultHome() {
+  const { data, isLoading, isError } = useOlderAdultHome();
+
+  if (isLoading) return <FullScreenMessage text="Loading your day…" />;
+  if (isError || !data) return <FullScreenMessage text="Something went quiet. Try again later." />;
+
+  return (
+    <main className="min-h-screen bg-warm-50 py-6 px-4 max-w-md mx-auto flex flex-col gap-4">
+      <GreetingCard greeting={data.greeting} date={data.date} />
+      <YesterdayWalkCard walk={data.yesterday_walk} />
+      {data.schematic_map && (
+        <Link to="/older-adult/week" aria-label="Open week view">
+          <SchematicMap map={data.schematic_map} />
+        </Link>
+      )}
+      <StreakCard days={data.streak_days} />
+      <FamilyNoteCard note={data.family_note} />
+      <TrendCard text={data.trend_card} />
+    </main>
+  );
+}
+
+function FullScreenMessage({ text }: { text: string }) {
+  return (
+    <main className="min-h-screen flex items-center justify-center text-lg text-warm-800/80">
+      {text}
+    </main>
+  );
+}
