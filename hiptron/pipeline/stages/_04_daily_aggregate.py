@@ -1,8 +1,8 @@
 """Stage 4 — roll per-walk features into daily features per user."""
+
 from __future__ import annotations
 
 import duckdb
-
 
 SQL = """
 INSERT INTO daily_features

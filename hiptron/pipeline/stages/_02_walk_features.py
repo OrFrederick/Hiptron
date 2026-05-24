@@ -1,8 +1,10 @@
 """Stage 2 — per-walk feature extraction."""
+
 from __future__ import annotations
 
 import hashlib
 import math
+from typing import Any
 
 import duckdb
 
@@ -14,7 +16,7 @@ PAUSE_SPEED_THRESHOLD = 0.3
 def compute_walk_features(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("DELETE FROM walk_features")
     walks = con.execute("SELECT walk_id, user_id, start_ts, end_ts FROM walks").fetchall()
-    rows: list[tuple] = []
+    rows: list[tuple[Any, ...]] = []
     for walk_id, user_id, start_ts, end_ts in walks:
         fixes = con.execute(
             """
@@ -29,12 +31,10 @@ def compute_walk_features(con: duckdb.DuckDBPyConnection) -> None:
             continue
         rows.append(_features_for_walk(walk_id, fixes))
     if rows:
-        con.executemany(
-            "INSERT INTO walk_features VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows
-        )
+        con.executemany("INSERT INTO walk_features VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
 
 
-def _features_for_walk(walk_id: str, fixes: list) -> tuple:
+def _features_for_walk(walk_id: str, fixes: list[Any]) -> tuple[Any, ...]:
     total_dist = 0.0
     speeds: list[float] = []
     dwell_s = 0.0
@@ -68,18 +68,23 @@ def _features_for_walk(walk_id: str, fixes: list) -> tuple:
     last_third = speeds[-third:]
     avg_first = sum(first_third) / max(1, len(first_third))
     avg_last = sum(last_third) / max(1, len(last_third))
-    speed_third_delta_pct = (
-        ((avg_last - avg_first) / avg_first * 100.0) if avg_first > 0 else 0.0
-    )
+    speed_third_delta_pct = ((avg_last - avg_first) / avg_first * 100.0) if avg_first > 0 else 0.0
 
     route_hash = _route_hash(fixes)
     return (
-        walk_id, total_dist, duration_s, mean_speed, peak_speed,
-        pause_count, dwell_s, speed_third_delta_pct, route_hash,
+        walk_id,
+        total_dist,
+        duration_s,
+        mean_speed,
+        peak_speed,
+        pause_count,
+        dwell_s,
+        speed_third_delta_pct,
+        route_hash,
     )
 
 
-def _route_hash(fixes: list, grid_m: float = 100.0) -> str:
+def _route_hash(fixes: list[Any], grid_m: float = 100.0) -> str:
     """Cheap route fingerprint: bucket-sequence of (lat, lon) on a coarse grid."""
     if not fixes:
         return ""

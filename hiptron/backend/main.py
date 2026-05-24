@@ -4,18 +4,24 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from hiptron.backend.models import (
-    InsightsDetail, OlderAdultHome, RelativeHome,
+    InsightsDetail,
+    OlderAdultHome,
+    RelativeHome,
 )
 from hiptron.backend.queries import (
-    insights_detail, older_adult_home, relative_home,
+    insights_detail,
+    older_adult_home,
+    relative_home,
 )
 
 
 def create_app(db_path: Path | str) -> FastAPI:
     app = FastAPI(title="Hiptron Mobility Insights")
     app.add_middleware(
-        CORSMiddleware, allow_origins=["*"],
-        allow_methods=["GET"], allow_headers=["*"],
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["GET"],
+        allow_headers=["*"],
     )
     db = Path(db_path)
 

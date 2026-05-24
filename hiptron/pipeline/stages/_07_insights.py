@@ -1,9 +1,11 @@
 """Stage 7 — convert change-points into audience-tagged insight rows."""
+
 from __future__ import annotations
 
 import datetime as dt
 import hashlib
 import json
+from typing import Any
 
 import duckdb
 
@@ -53,10 +55,15 @@ def generate_insights(con: duckdb.DuckDBPyConnection) -> None:
         ORDER BY user_id, detected_at
         """
     ).fetchall()
-    rows: list[tuple] = []
+    rows: list[tuple[Any, ...]] = []
     for (
-        user_id, feature, detected_at, direction, score,
-        baseline_mean, current_value,
+        user_id,
+        feature,
+        detected_at,
+        direction,
+        _score,
+        baseline_mean,
+        current_value,
     ) in cps:
         pct_delta = 0.0
         if baseline_mean:
@@ -76,22 +83,24 @@ def generate_insights(con: duckdb.DuckDBPyConnection) -> None:
             template_id, template_str = TEMPLATES[key]
             payload_with_text = {**payload, "text": template_str.format(**payload)}
             insight_id = _insight_id(user_id, audience, feature, detected_at)
-            rows.append((
-                insight_id, user_id, audience,
-                f"{feature}_{direction}", "notice",
-                template_id, json.dumps(payload_with_text),
-                dt.datetime.combine(detected_at, dt.time(8, 0)),
-                None,
-            ))
+            rows.append(
+                (
+                    insight_id,
+                    user_id,
+                    audience,
+                    f"{feature}_{direction}",
+                    "notice",
+                    template_id,
+                    json.dumps(payload_with_text),
+                    dt.datetime.combine(detected_at, dt.time(8, 0)),
+                    None,
+                )
+            )
     if rows:
-        con.executemany(
-            "INSERT INTO insights VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows
-        )
+        con.executemany("INSERT INTO insights VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
 
 
-def _insight_id(
-    user_id: str, audience: str, feature: str, detected_at: dt.date
-) -> str:
+def _insight_id(user_id: str, audience: str, feature: str, detected_at: dt.date) -> str:
     return hashlib.sha1(
         f"{user_id}|{audience}|{feature}|{detected_at.isoformat()}".encode()
     ).hexdigest()[:16]

@@ -2,6 +2,7 @@ import datetime as dt_mod
 import math
 import random
 from datetime import datetime, timedelta
+from typing import Any
 
 import duckdb
 
@@ -28,12 +29,15 @@ def generate(scenario: Scenario, con: duckdb.DuckDBPyConnection) -> None:
     cur = start
     end = scenario.end()
     while cur < end:
-        rows.append((
-            scenario.user_id, cur,
-            scenario.home_lat + rng.gauss(0, 2e-6),
-            scenario.home_lon + rng.gauss(0, 2e-6),
-            6.0,
-        ))
+        rows.append(
+            (
+                scenario.user_id,
+                cur,
+                scenario.home_lat + rng.gauss(0, 2e-6),
+                scenario.home_lon + rng.gauss(0, 2e-6),
+                6.0,
+            )
+        )
         cur += timedelta(minutes=5)
 
     day = start.date()
@@ -52,9 +56,7 @@ def generate(scenario: Scenario, con: duckdb.DuckDBPyConnection) -> None:
             _emit_outing(rows, scenario, place, start_dt, decline_factor, rng)
         day += timedelta(days=1)
 
-    con.executemany(
-        "INSERT OR REPLACE INTO gps_fixes VALUES (?, ?, ?, ?, ?)", rows
-    )
+    con.executemany("INSERT OR REPLACE INTO gps_fixes VALUES (?, ?, ?, ?, ?)", rows)
 
 
 def _decline_factor(scenario: Scenario, week_idx: int) -> float:
@@ -92,7 +94,7 @@ def _pick_place(
 
 
 def _emit_outing(
-    rows: list,
+    rows: list[Any],
     scenario: Scenario,
     place: NamedPlace,
     start_dt: datetime,
@@ -125,10 +127,12 @@ def _emit_outing(
 
     dwell_min = rng.randint(10, 40)
     for j in range(dwell_min):
-        rows.append((
-            scenario.user_id,
-            start_dt + timedelta(seconds=n_steps * 5 + j * 60),
-            place_lat + rng.gauss(0, 1e-5),
-            place_lon + rng.gauss(0, 1e-5),
-            rng.uniform(3.0, 8.0),
-        ))
+        rows.append(
+            (
+                scenario.user_id,
+                start_dt + timedelta(seconds=n_steps * 5 + j * 60),
+                place_lat + rng.gauss(0, 1e-5),
+                place_lon + rng.gauss(0, 1e-5),
+                rng.uniform(3.0, 8.0),
+            )
+        )

@@ -3,12 +3,20 @@ from __future__ import annotations
 import datetime as dt
 import json
 from pathlib import Path
+from typing import Any, Literal
 
 import duckdb
 
 from hiptron.backend.models import (
-    InsightBlock, InsightsDetail, OlderAdultHome, Place,
-    RelativeHome, SchematicMap, WalkSummary, WeeklyTrend, WeeklyTrendPoint,
+    InsightBlock,
+    InsightsDetail,
+    OlderAdultHome,
+    Place,
+    RelativeHome,
+    SchematicMap,
+    WalkSummary,
+    WeeklyTrend,
+    WeeklyTrendPoint,
     WorthNoticing,
 )
 from hiptron.db.connection import open_db
@@ -63,8 +71,11 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
             ).fetchall()
             place_labels = [v[0] for v in visits]
             yesterday_walk = WalkSummary(
-                walk_id=walk_id, start_ts=start_ts, end_ts=end_ts,
-                distance_m=distance, place_labels=place_labels,
+                walk_id=walk_id,
+                start_ts=start_ts,
+                end_ts=end_ts,
+                distance_m=distance,
+                place_labels=place_labels,
             )
             polyline = con.execute(
                 """
@@ -88,9 +99,13 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
                     (user_id,),
                 ).fetchall()
             ]
+            home_lat = float(home[0]) if home else 0.0
+            home_lon = float(home[1]) if home else 0.0
             schematic = SchematicMap(
-                home_lat=home[0], home_lon=home[1],
-                places=places, walk_polyline=polyline,
+                home_lat=home_lat,
+                home_lon=home_lon,
+                places=places,
+                walk_polyline=polyline,
             )
 
         streak = _streak_days(con, user_id)
@@ -128,9 +143,7 @@ def _streak_days(con: duckdb.DuckDBPyConnection, user_id: str) -> int:
     return streak
 
 
-def _latest_older_adult_trend_text(
-    con: duckdb.DuckDBPyConnection, user_id: str
-) -> str | None:
+def _latest_older_adult_trend_text(con: duckdb.DuckDBPyConnection, user_id: str) -> str | None:
     row = con.execute(
         """
         SELECT payload_json FROM insights
@@ -141,7 +154,7 @@ def _latest_older_adult_trend_text(
     ).fetchone()
     if not row:
         return None
-    return json.loads(row[0])["text"]
+    return str(json.loads(row[0])["text"])
 
 
 def relative_home(db_path: Path, user_id: str) -> RelativeHome:
@@ -186,7 +199,7 @@ def relative_home(db_path: Path, user_id: str) -> RelativeHome:
             (user_id, dt.datetime.combine(ref_date, dt.time(0, 0))),
         ).fetchone()
         worth = None
-        status: str = "green"
+        status: Literal["green", "amber"] = "green"
         if latest_cp:
             payload = json.loads(latest_cp[0])
             status = "amber"
@@ -201,18 +214,21 @@ def relative_home(db_path: Path, user_id: str) -> RelativeHome:
         last_update_row = con.execute(
             "SELECT max(ts) FROM gps_fixes WHERE user_id = ?", (user_id,)
         ).fetchone()
-        last_update = last_update_row[0] or dt.datetime.now()
+        last_update = (last_update_row[0] if last_update_row else None) or dt.datetime.now()
 
         summary = "Routine looks normal." if status == "green" else "Worth noticing this week."
         return RelativeHome(
-            status=status, last_update=last_update,
-            summary=summary, weekly_trend=weekly, worth_noticing=worth,
+            status=status,
+            last_update=last_update,
+            summary=summary,
+            weekly_trend=weekly,
+            worth_noticing=worth,
         )
     finally:
         con.close()
 
 
-def _trend_headline(points: list[tuple], baseline_mean: float) -> str:
+def _trend_headline(points: list[tuple[Any, Any]], baseline_mean: float) -> str:
     if not points or baseline_mean <= 0:
         return "Not enough data yet."
     recent = sum((v or 0.0) for _, v in points) / max(1, len(points))
@@ -234,12 +250,13 @@ def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
         ref_date = ref_date_row[0] if ref_date_row and ref_date_row[0] else dt.date.today()
 
         blocks: list[InsightBlock] = []
-        for feature, question, chart_kind in (
+        chart_data: list[tuple[str, str, Literal["line", "bar", "places", "list"]]] = [
             ("total_distance_m", "How far is Helga going?", "bar"),
             ("activity_radius_m", "Is the daily routine holding?", "line"),
             ("fatigue_index", "Are walks getting harder?", "line"),
             ("place_count", "Where has she been?", "places"),
-        ):
+        ]
+        for feature, question, chart_kind in chart_data:
             series_rows = con.execute(
                 f"""
                 SELECT date, {feature} FROM daily_features
@@ -259,16 +276,18 @@ def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
             baseline_mean = float(baseline[0]) if baseline else 0.0
             verdict = _block_verdict(feature, series_rows, baseline_mean)
             hidden = len(series_rows) < 14
-            blocks.append(InsightBlock(
-                question=question,
-                verdict=verdict,
-                chart_kind=chart_kind,
-                series=[
-                    {"date": str(d), "value": v or 0.0, "baseline": baseline_mean}
-                    for d, v in series_rows
-                ],
-                hidden=hidden,
-            ))
+            blocks.append(
+                InsightBlock(
+                    question=question,
+                    verdict=verdict,
+                    chart_kind=chart_kind,
+                    series=[
+                        {"date": str(d), "value": v or 0.0, "baseline": baseline_mean}
+                        for d, v in series_rows
+                    ],
+                    hidden=hidden,
+                )
+            )
 
         cp_rows = con.execute(
             """
@@ -281,25 +300,33 @@ def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
         ).fetchall()
         cp_verdict = (
             "Nothing has changed enough to mention."
-            if not cp_rows else f"{len(cp_rows)} change-point(s) detected recently."
+            if not cp_rows
+            else f"{len(cp_rows)} change-point(s) detected recently."
         )
-        blocks.append(InsightBlock(
-            question="Any change-points lately?",
-            verdict=cp_verdict,
-            chart_kind="list",
-            series=[
-                {"feature": f, "detected_at": str(d), "direction": dr,
-                 "baseline_mean": bm, "current_value": cv}
-                for f, d, dr, bm, cv in cp_rows
-            ],
-            hidden=False,
-        ))
+        blocks.append(
+            InsightBlock(
+                question="Any change-points lately?",
+                verdict=cp_verdict,
+                chart_kind="list",
+                series=[
+                    {
+                        "feature": f,
+                        "detected_at": str(d),
+                        "direction": dr,
+                        "baseline_mean": bm,
+                        "current_value": cv,
+                    }
+                    for f, d, dr, bm, cv in cp_rows
+                ],
+                hidden=False,
+            )
+        )
         return InsightsDetail(user_id=user_id, blocks=blocks)
     finally:
         con.close()
 
 
-def _block_verdict(feature: str, series: list[tuple], baseline_mean: float) -> str:
+def _block_verdict(feature: str, series: list[tuple[Any, Any]], baseline_mean: float) -> str:
     if not series or baseline_mean <= 0:
         return "Not enough data yet."
     recent_vals = [v for _, v in series[-7:] if v is not None]

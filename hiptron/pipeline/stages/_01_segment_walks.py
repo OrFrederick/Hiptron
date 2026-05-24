@@ -1,9 +1,11 @@
 """Stage 1 — segment GPS fix stream into walks."""
+
 from __future__ import annotations
 
 import hashlib
 import math
 from datetime import datetime
+from typing import Any
 
 import duckdb
 
@@ -31,7 +33,7 @@ def segment_walks(con: duckdb.DuckDBPyConnection) -> None:
         _segment_user(con, user_id)
 
 
-def _path_distance_m(fixes: list, start_idx: int, end_idx: int) -> float:
+def _path_distance_m(fixes: list[Any], start_idx: int, end_idx: int) -> float:
     total = 0.0
     for j in range(start_idx + 1, end_idx + 1):
         _, la, lo = fixes[j - 1]
@@ -68,6 +70,9 @@ def _segment_user(con: duckdb.DuckDBPyConnection, user_id: str) -> None:
                 last_away_ts = ts
                 last_away_idx = i
             else:
+                assert walk_start_idx is not None
+                assert last_away_ts is not None
+                assert last_away_idx is not None
                 gap = (ts - last_away_ts).total_seconds()
                 if gap >= MIN_BACK_S:
                     start_ts = fixes[walk_start_idx][0]
@@ -75,7 +80,8 @@ def _segment_user(con: duckdb.DuckDBPyConnection, user_id: str) -> None:
                     duration = (end_ts - start_ts).total_seconds()
                     if duration >= MIN_AWAY_S:
                         dist = _path_distance_m(fixes, walk_start_idx, last_away_idx)
-                        if dist >= MIN_DISTANCE_M and duration > 0 and dist / duration >= MIN_MEAN_SPEED_MS:
+                        speed_ok = duration > 0 and dist / duration >= MIN_MEAN_SPEED_MS
+                        if dist >= MIN_DISTANCE_M and speed_ok:
                             walk_id = _walk_id(user_id, start_ts)
                             fix_count = last_away_idx - walk_start_idx + 1
                             walks.append((walk_id, user_id, start_ts, end_ts, fix_count))
@@ -84,20 +90,25 @@ def _segment_user(con: duckdb.DuckDBPyConnection, user_id: str) -> None:
                     last_away_ts = None
                     last_away_idx = None
 
-    if in_walk and walk_start_idx is not None and last_away_ts is not None and last_away_idx is not None:
+    if (
+        in_walk
+        and walk_start_idx is not None
+        and last_away_ts is not None
+        and last_away_idx is not None
+    ):
         start_ts = fixes[walk_start_idx][0]
         end_ts = last_away_ts
         duration = (end_ts - start_ts).total_seconds()
         if duration >= MIN_AWAY_S:
             dist = _path_distance_m(fixes, walk_start_idx, last_away_idx)
-            if dist >= MIN_DISTANCE_M and duration > 0 and dist / duration >= MIN_MEAN_SPEED_MS:
+            speed_ok = duration > 0 and dist / duration >= MIN_MEAN_SPEED_MS
+            if dist >= MIN_DISTANCE_M and speed_ok:
                 walk_id = _walk_id(user_id, start_ts)
-                walks.append((walk_id, user_id, start_ts, end_ts, last_away_idx - walk_start_idx + 1))
+                fix_span = last_away_idx - walk_start_idx + 1
+                walks.append((walk_id, user_id, start_ts, end_ts, fix_span))
 
     if walks:
-        con.executemany(
-            "INSERT INTO walks VALUES (?, ?, ?, ?, ?)", walks
-        )
+        con.executemany("INSERT INTO walks VALUES (?, ?, ?, ?, ?)", walks)
 
 
 def _walk_id(user_id: str, start_ts: datetime) -> str:

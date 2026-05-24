@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -67,7 +67,7 @@ class InsightBlock(BaseModel):
     question: str
     verdict: str
     chart_kind: Literal["line", "bar", "places", "list"]
-    series: list[dict]
+    series: list[dict[str, Any]]
     hidden: bool = False
 
 

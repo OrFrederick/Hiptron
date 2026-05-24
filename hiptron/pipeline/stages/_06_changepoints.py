@@ -1,7 +1,9 @@
 """Stage 6 — CUSUM change-point detection vs rolling baseline."""
+
 from __future__ import annotations
 
 import datetime as dt
+from typing import Any
 
 import duckdb
 
@@ -18,24 +20,16 @@ THRESHOLD_SIGMAS_UP = 4.5
 
 def detect_changepoints(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("DELETE FROM changepoints")
-    users = [
-        r[0] for r in con.execute(
-            "SELECT DISTINCT user_id FROM daily_features"
-        ).fetchall()
-    ]
-    rows: list[tuple] = []
+    users = [r[0] for r in con.execute("SELECT DISTINCT user_id FROM daily_features").fetchall()]
+    rows: list[tuple[Any, ...]] = []
     for user_id in users:
         for feature in TRACKED_FEATURES:
             rows.extend(_cusum_for(con, user_id, feature))
     if rows:
-        con.executemany(
-            "INSERT INTO changepoints VALUES (?, ?, ?, ?, ?, ?, ?)", rows
-        )
+        con.executemany("INSERT INTO changepoints VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
 
 
-def _cusum_for(
-    con: duckdb.DuckDBPyConnection, user_id: str, feature: str
-) -> list[tuple]:
+def _cusum_for(con: duckdb.DuckDBPyConnection, user_id: str, feature: str) -> list[tuple[Any, ...]]:
     series = con.execute(
         f"""
         SELECT d.date, d.{feature}, b.mean, b.std
@@ -55,7 +49,7 @@ def _cusum_for(
     neg = 0.0
     sustained_down = 0
     sustained_up = 0
-    detections: list[tuple] = []
+    detections: list[tuple[Any, ...]] = []
     last_fired: dt.date | None = None
     for date, value, mean, std in series:
         if mean is None or std is None or std <= 0:
@@ -79,9 +73,7 @@ def _cusum_for(
             and sustained_down >= SUSTAINED_DAYS
             and (last_fired is None or (date - last_fired).days > 14)
         ):
-            detections.append(
-                (user_id, feature, date, "down", abs(neg), mean, value)
-            )
+            detections.append((user_id, feature, date, "down", abs(neg), mean, value))
             last_fired = date
             pos = neg = 0.0
             sustained_down = 0
@@ -90,9 +82,7 @@ def _cusum_for(
             and sustained_up >= SUSTAINED_DAYS
             and (last_fired is None or (date - last_fired).days > 14)
         ):
-            detections.append(
-                (user_id, feature, date, "up", pos, mean, value)
-            )
+            detections.append((user_id, feature, date, "up", pos, mean, value))
             last_fired = date
             pos = neg = 0.0
             sustained_up = 0

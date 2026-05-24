@@ -1,10 +1,11 @@
 """CLI: python -m hiptron.pipeline run --db data/hiptron.duckdb --stage all|<name>"""
+
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import duckdb
 

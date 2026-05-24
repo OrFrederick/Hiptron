@@ -1,7 +1,9 @@
 """Stage 5 — rolling 4-week mean+std per (user, feature)."""
+
 from __future__ import annotations
 
 import datetime as dt
+from typing import Any
 
 import duckdb
 
@@ -17,12 +19,8 @@ COLD_START_DAYS = 28
 
 def update_baselines(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("DELETE FROM baselines")
-    users = [
-        r[0] for r in con.execute(
-            "SELECT DISTINCT user_id FROM daily_features"
-        ).fetchall()
-    ]
-    rows: list[tuple] = []
+    users = [r[0] for r in con.execute("SELECT DISTINCT user_id FROM daily_features").fetchall()]
+    rows: list[tuple[Any, ...]] = []
     for user_id in users:
         date_range = con.execute(
             "SELECT min(date), max(date) FROM daily_features WHERE user_id = ?",
@@ -46,12 +44,16 @@ def update_baselines(con: duckdb.DuckDBPyConnection) -> None:
                     (user_id, window_start, cur),
                 ).fetchone()
                 if stats and stats[2] and stats[2] >= 14:
-                    rows.append((
-                        user_id, feature, cur,
-                        float(stats[0]), float(stats[1] or 0.0), int(stats[2]),
-                    ))
+                    rows.append(
+                        (
+                            user_id,
+                            feature,
+                            cur,
+                            float(stats[0]),
+                            float(stats[1] or 0.0),
+                            int(stats[2]),
+                        )
+                    )
             cur += dt.timedelta(days=1)
     if rows:
-        con.executemany(
-            "INSERT INTO baselines VALUES (?, ?, ?, ?, ?, ?)", rows
-        )
+        con.executemany("INSERT INTO baselines VALUES (?, ?, ?, ?, ?, ?)", rows)
