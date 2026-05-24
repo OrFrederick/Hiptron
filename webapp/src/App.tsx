@@ -1,12 +1,18 @@
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 
 import OlderAdultHome from "./modes/older-adult/Home";
+import OlderAdultWeekView from "./modes/older-adult/WeekView";
+import RelativeHome from "./modes/relative/Home";
+import InsightsDetail from "./modes/relative/InsightsDetail";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<ModeChooser />} />
       <Route path="/older-adult" element={<OlderAdultHome />} />
+      <Route path="/older-adult/week" element={<OlderAdultWeekView />} />
+      <Route path="/relative" element={<RelativeHome />} />
+      <Route path="/relative/insights" element={<InsightsDetail />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
