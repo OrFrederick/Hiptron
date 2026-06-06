@@ -56,60 +56,54 @@ BASELINE_SCENARIO = Scenario(
 )
 
 
-DECLINE_SCENARIO = Scenario(
+HELGA_SCENARIO = Scenario(
     user_id="helga",
     seed=7,
-    weeks=10,
+    weeks=12,
     home_lat=52.5200,
     home_lon=13.4050,
     outings_per_day=2,
     mean_outing_distance_m=1200.0,
-    distance_decline_pct_per_week=20.0,
-    decline_start_week=4,
+    distance_decline_pct_per_week=18.0,
+    decline_start_week=6,
 )
 
-
-FATIGUE_SCENARIO = Scenario(
-    user_id="helga",
-    seed=3,
-    weeks=10,
-    home_lat=52.5200,
-    home_lon=13.4050,
-    outings_per_day=2,
-    mean_outing_distance_m=1200.0,
-    fatigue_onset_week=5,
-)
-
-
-SHRINK_SCENARIO = Scenario(
-    user_id="helga",
+OTTO_SCENARIO = Scenario(
+    user_id="otto",
     seed=21,
-    weeks=10,
-    home_lat=52.5200,
-    home_lon=13.4050,
+    weeks=12,
+    home_lat=50.7753,
+    home_lon=6.0839,
     outings_per_day=2,
-    mean_outing_distance_m=1200.0,
+    mean_outing_distance_m=1100.0,
     place_repertoire_shrink=True,
 )
 
+MARGARETE_SCENARIO = Scenario(
+    user_id="margarete",
+    seed=33,
+    weeks=12,
+    home_lat=48.1351,
+    home_lon=11.5820,
+    outings_per_day=3,
+    mean_outing_distance_m=1000.0,
+    outings_decline_start_week=6,
+)
 
-COMBINED_SCENARIO = Scenario(
-    user_id="helga",
-    seed=7,
-    weeks=10,
-    home_lat=52.5200,
-    home_lon=13.4050,
+INGRID_SCENARIO = Scenario(
+    user_id="ingrid",
+    seed=99,
+    weeks=12,
+    home_lat=53.5511,
+    home_lon=9.9937,
     outings_per_day=2,
-    mean_outing_distance_m=1200.0,
-    distance_decline_pct_per_week=20.0,
-    decline_start_week=4,
+    mean_outing_distance_m=1300.0,
 )
 
 
 SCENARIOS = {
-    "baseline": BASELINE_SCENARIO,
-    "decline": DECLINE_SCENARIO,
-    "fatigue": FATIGUE_SCENARIO,
-    "shrink": SHRINK_SCENARIO,
-    "combined": COMBINED_SCENARIO,
+    "helga": HELGA_SCENARIO,
+    "otto": OTTO_SCENARIO,
+    "margarete": MARGARETE_SCENARIO,
+    "ingrid": INGRID_SCENARIO,
 }

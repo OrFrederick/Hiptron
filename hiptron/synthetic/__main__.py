@@ -11,20 +11,23 @@ from hiptron.synthetic.scenarios import SCENARIOS
 
 
 def seed(db_path: Path | str, scenario_name: str, *, replace: bool) -> None:
-    if scenario_name not in SCENARIOS:
-        raise SystemExit(f"unknown scenario: {scenario_name} (known: {list(SCENARIOS)})")
-    scenario = SCENARIOS[scenario_name]
+    names = list(SCENARIOS) if scenario_name == "all" else [scenario_name]
+    for name in names:
+        if name not in SCENARIOS:
+            raise SystemExit(f"unknown scenario: {name} (known: {list(SCENARIOS)})")
     con = open_db(db_path, read_only=False)
     apply_schema(con)
     try:
-        if replace:
-            con.execute("DELETE FROM gps_fixes WHERE user_id = ?", (scenario.user_id,))
-        print(f"[seed] scenario={scenario_name} user={scenario.user_id} weeks={scenario.weeks}")
-        generate(scenario, con)
-        n = con.execute(
-            "SELECT count(*) FROM gps_fixes WHERE user_id = ?", (scenario.user_id,)
-        ).fetchone()[0]
-        print(f"[seed] gps_fixes for {scenario.user_id}: {n}")
+        for name in names:
+            scenario = SCENARIOS[name]
+            if replace:
+                con.execute("DELETE FROM gps_fixes WHERE user_id = ?", (scenario.user_id,))
+            print(f"[seed] scenario={name} user={scenario.user_id} weeks={scenario.weeks}")
+            generate(scenario, con)
+            n = con.execute(
+                "SELECT count(*) FROM gps_fixes WHERE user_id = ?", (scenario.user_id,)
+            ).fetchone()[0]
+            print(f"[seed] gps_fixes for {scenario.user_id}: {n}")
     finally:
         con.close()
 
@@ -34,7 +37,7 @@ def main() -> None:
     sub = parser.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("seed")
     s.add_argument("--db", default="data/hiptron.duckdb")
-    s.add_argument("--scenario", default="combined", choices=list(SCENARIOS))
+    s.add_argument("--scenario", default="all", choices=[*SCENARIOS, "all"])
     s.add_argument(
         "--replace",
         action="store_true",

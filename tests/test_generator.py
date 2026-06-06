@@ -35,3 +35,22 @@ def test_places_override_subset():
     subset = DEFAULT_PLACES[:2]
     s = _scn(places=subset)
     assert _places_for_week(s, 0, None) == subset
+
+
+from hiptron.synthetic.scenarios import SCENARIOS
+
+
+def test_personas_have_distinct_user_ids():
+    assert set(SCENARIOS) == {"helga", "otto", "margarete", "ingrid"}
+    uids = {name: scn.user_id for name, scn in SCENARIOS.items()}
+    assert uids == {
+        "helga": "helga",
+        "otto": "otto",
+        "margarete": "margarete",
+        "ingrid": "ingrid",
+    }
+    # ingrid is the healthy control: no decline knobs.
+    ing = SCENARIOS["ingrid"]
+    assert ing.distance_decline_pct_per_week == 0.0
+    assert ing.outings_decline_start_week is None
+    assert ing.place_repertoire_shrink is False
