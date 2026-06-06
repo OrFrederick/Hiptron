@@ -152,7 +152,10 @@ def _streak_days(con: duckdb.DuckDBPyConnection, user_id: str) -> int:
     return streak
 
 
-def _latest_older_adult_trend_text(con: duckdb.DuckDBPyConnection, user_id: str) -> str | None:
+ALL_CLEAR_OLDER = "Schöne, gleichmäßige Woche. Weiter so."
+
+
+def _latest_older_adult_trend_text(con: duckdb.DuckDBPyConnection, user_id: str) -> str:
     row = con.execute(
         """
         SELECT payload_json FROM insights
@@ -162,7 +165,7 @@ def _latest_older_adult_trend_text(con: duckdb.DuckDBPyConnection, user_id: str)
         (user_id,),
     ).fetchone()
     if not row:
-        return None
+        return ALL_CLEAR_OLDER
     return str(json.loads(row[0])["text"])
 
 
