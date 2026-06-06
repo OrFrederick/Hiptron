@@ -10,9 +10,11 @@ import {
 
 import { useRelativeInsights } from "../../shared/api";
 import { Card } from "../../shared/Card";
+import { usePersona } from "../../shared/persona";
 
 export default function OlderAdultWeekView() {
-  const { data } = useRelativeInsights("helga");
+  const userId = usePersona();
+  const { data } = useRelativeInsights(userId);
   const distanceBlock = data?.blocks.find(
     (b) => b.feature === "total_distance_m",
   );
@@ -22,7 +24,7 @@ export default function OlderAdultWeekView() {
   }));
   return (
     <main className="min-h-screen bg-warm-50 py-6 px-4 max-w-md mx-auto flex flex-col gap-4">
-      <Link to="/older-adult" className="text-warm-800/70 text-sm">
+      <Link to={`/older-adult?u=${userId}`} className="text-warm-800/70 text-sm">
         ← zurück
       </Link>
       <Card>
