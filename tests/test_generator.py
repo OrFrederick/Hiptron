@@ -1,6 +1,6 @@
 # tests/test_generator.py
 from hiptron.synthetic.generator import _outings_for_week, _places_for_week
-from hiptron.synthetic.scenarios import DEFAULT_PLACES, Scenario
+from hiptron.synthetic.scenarios import DEFAULT_PLACES, SCENARIOS, Scenario
 
 
 def _scn(**kw) -> Scenario:
@@ -35,9 +35,6 @@ def test_places_override_subset():
     subset = DEFAULT_PLACES[:2]
     s = _scn(places=subset)
     assert _places_for_week(s, 0, None) == subset
-
-
-from hiptron.synthetic.scenarios import SCENARIOS
 
 
 def test_personas_have_distinct_user_ids():
