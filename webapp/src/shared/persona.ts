@@ -13,3 +13,7 @@ export function usePersona(): string {
   const u = params.get("u");
   return PERSONAS.some((p) => p.id === u) ? (u as string) : "helga";
 }
+
+export function personaName(id: string): string {
+  return PERSONAS.find((p) => p.id === id)?.name ?? id;
+}

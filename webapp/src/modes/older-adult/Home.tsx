@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 import { useOlderAdultHome } from "../../shared/api";
 import { PersonaSwitcher } from "../../shared/PersonaSwitcher";
-import { usePersona } from "../../shared/persona";
+import { personaName, usePersona } from "../../shared/persona";
 import { GreetingCard } from "./cards/GreetingCard";
 import { YesterdayWalkCard } from "./cards/YesterdayWalkCard";
 import { StreakCard } from "./cards/StreakCard";
@@ -21,7 +21,11 @@ export default function OlderAdultHome() {
   return (
     <main className="min-h-screen bg-warm-50 py-6 px-4 max-w-md mx-auto flex flex-col gap-4">
       <PersonaSwitcher />
-      <GreetingCard greeting={data.greeting} date={data.date} />
+      <GreetingCard
+        greeting={data.greeting}
+        name={personaName(userId)}
+        date={data.date}
+      />
       <YesterdayWalkCard walk={data.yesterday_walk} />
       {data.schematic_map && (
         <Link to={`/older-adult/week?u=${userId}`} aria-label="Wochenansicht öffnen">
