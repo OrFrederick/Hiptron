@@ -180,9 +180,9 @@ export function projectPoints(map: SchematicMapType) {
   const dLat = Math.max(1e-6, maxLat - minLat);
   const dLon = Math.max(1e-6, maxLon - minLon);
   const inner = VIEW_SIZE - PADDING * 2;
-  const lo = PADDING;
-  const hi = VIEW_SIZE - PADDING;
-  const clamp = (n: number) => Math.min(hi, Math.max(lo, n));
+  const clampLo = PADDING;
+  const clampHi = VIEW_SIZE - PADDING;
+  const clamp = (n: number) => Math.min(clampHi, Math.max(clampLo, n));
   const project = (lat: number, lon: number): [number, number] => {
     const x = PADDING + ((lon - minLon) / dLon) * inner;
     const y = VIEW_SIZE - PADDING - ((lat - minLat) / dLat) * inner;
