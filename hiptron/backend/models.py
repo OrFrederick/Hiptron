@@ -69,6 +69,7 @@ class InsightBlock(BaseModel):
     chart_kind: Literal["line", "bar", "places", "list"]
     series: list[dict[str, Any]]
     hidden: bool = False
+    feature: str | None = None
 
 
 class InsightsDetail(BaseModel):

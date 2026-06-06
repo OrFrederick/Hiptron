@@ -21,6 +21,6 @@ export default defineConfig({
       },
     }),
   ],
-  server: { proxy: { "/api": "http://localhost:8000" } },
+  server: { proxy: { "/api": "http://localhost:8001" } },
   test: { environment: "jsdom", setupFiles: ["./tests/setup.ts"], globals: true },
 });

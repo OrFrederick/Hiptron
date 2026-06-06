@@ -59,6 +59,7 @@ export interface InsightBlock {
   chart_kind: ChartKind;
   series: Record<string, unknown>[];
   hidden: boolean;
+  feature?: string | null;
 }
 export interface InsightsDetail {
   user_id: string;

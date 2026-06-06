@@ -38,7 +38,7 @@ export function WeeklyTrendCard({ trend }: Props) {
         </ResponsiveContainer>
       </div>
       <p className="text-xs text-warm-800/60 mt-2">
-        Bars = daily distance. Dashed line = 4-week average.
+        Balken = Tagesstrecke. Gestrichelte Linie = 4-Wochen-Mittelwert.
       </p>
     </Card>
   );

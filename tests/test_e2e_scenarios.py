@@ -87,7 +87,7 @@ def test_distance_decline_scenario_fires_relative_card(decline_db: Path):
 def test_fatigue_scenario_surfaces_in_insights(fatigue_db: Path):
     client = TestClient(create_app(fatigue_db))
     body = client.get("/api/relative/insights", params={"user_id": "helga"}).json()
-    fatigue_block = next(b for b in body["blocks"] if "harder" in b["question"])
+    fatigue_block = next(b for b in body["blocks"] if b.get("feature") == "fatigue_index")
     assert fatigue_block["verdict"]
 
 

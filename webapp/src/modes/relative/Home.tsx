@@ -8,7 +8,7 @@ export default function RelativeHome() {
   const { data, isLoading, isError } = useRelativeHome();
   if (isLoading) return <Loading />;
   if (isError || !data)
-    return <Loading text="Couldn't load — try again later." />;
+    return <Loading text="Konnte nicht geladen werden — bitte später erneut versuchen." />;
   return (
     <main className="min-h-screen bg-warm-50 py-6 px-4 max-w-md mx-auto flex flex-col gap-4">
       <StatusCard
@@ -23,7 +23,7 @@ export default function RelativeHome() {
   );
 }
 
-function Loading({ text = "Loading…" }: { text?: string }) {
+function Loading({ text = "Lädt…" }: { text?: string }) {
   return (
     <main className="min-h-screen flex items-center justify-center text-lg text-warm-800/80">
       {text}

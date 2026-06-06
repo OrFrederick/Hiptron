@@ -11,16 +11,16 @@ import { SchematicMap } from "./SchematicMap";
 export default function OlderAdultHome() {
   const { data, isLoading, isError } = useOlderAdultHome();
 
-  if (isLoading) return <FullScreenMessage text="Loading your day…" />;
+  if (isLoading) return <FullScreenMessage text="Lade deinen Tag…" />;
   if (isError || !data)
-    return <FullScreenMessage text="Something went quiet. Try again later." />;
+    return <FullScreenMessage text="Etwas ist still geworden. Bitte später erneut versuchen." />;
 
   return (
     <main className="min-h-screen bg-warm-50 py-6 px-4 max-w-md mx-auto flex flex-col gap-4">
       <GreetingCard greeting={data.greeting} date={data.date} />
       <YesterdayWalkCard walk={data.yesterday_walk} />
       {data.schematic_map && (
-        <Link to="/older-adult/week" aria-label="Open week view">
+        <Link to="/older-adult/week" aria-label="Wochenansicht öffnen">
           <SchematicMap map={data.schematic_map} />
         </Link>
       )}

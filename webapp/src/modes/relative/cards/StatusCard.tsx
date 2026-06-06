@@ -11,17 +11,17 @@ interface Props {
 export function StatusCard({ status, summary, lastUpdate }: Props) {
   const dotColor = status === "green" ? "bg-moss-600" : "bg-amber-500";
   return (
-    <Link to="/relative/insights" aria-label="Open insights detail">
+    <Link to="/relative/insights" aria-label="Details öffnen">
       <Card>
         <div className="flex items-center gap-3">
           <span
             className={`w-4 h-4 rounded-full ${dotColor}`}
-            aria-label={`status ${status}`}
+            aria-label={`Status ${status}`}
           />
           <div className="flex-1">
             <p className="text-lg font-medium">{summary}</p>
             <p className="text-warm-800/60 text-sm">
-              Updated {new Date(lastUpdate).toLocaleString()}
+              Stand {new Date(lastUpdate).toLocaleString("de-DE")}
             </p>
           </div>
           <button
@@ -31,7 +31,7 @@ export function StatusCard({ status, summary, lastUpdate }: Props) {
               e.preventDefault();
             }}
           >
-            ♥ Send
+            ♥ Gruß
           </button>
         </div>
       </Card>

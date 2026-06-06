@@ -9,7 +9,7 @@ export function TrendCard({ text }: Props) {
   return (
     <Card>
       <p className="text-warm-800/70 text-sm uppercase tracking-wide">
-        A gentle note
+        Ein liebes Wort
       </p>
       <p className="text-lg mt-2">{text}</p>
     </Card>

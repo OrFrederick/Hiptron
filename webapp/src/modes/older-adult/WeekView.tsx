@@ -13,8 +13,8 @@ import { Card } from "../../shared/Card";
 
 export default function OlderAdultWeekView() {
   const { data } = useRelativeInsights("helga");
-  const distanceBlock = data?.blocks.find((b) =>
-    b.question.includes("How far"),
+  const distanceBlock = data?.blocks.find(
+    (b) => b.feature === "total_distance_m",
   );
   const points = (distanceBlock?.series ?? []).map((p) => ({
     date: String(p.date).slice(5),
@@ -23,11 +23,11 @@ export default function OlderAdultWeekView() {
   return (
     <main className="min-h-screen bg-warm-50 py-6 px-4 max-w-md mx-auto flex flex-col gap-4">
       <Link to="/older-adult" className="text-warm-800/70 text-sm">
-        ← back
+        ← zurück
       </Link>
       <Card>
         <p className="text-warm-800/70 text-sm uppercase tracking-wide">
-          Your week
+          Deine Woche
         </p>
         <div className="h-48 mt-3">
           <ResponsiveContainer>
@@ -40,7 +40,7 @@ export default function OlderAdultWeekView() {
           </ResponsiveContainer>
         </div>
         <p className="text-lg mt-3">
-          Each bar is a day&apos;s walking distance, in kilometres.
+          Jeder Balken steht für die Gehstrecke eines Tages, in Kilometern.
         </p>
       </Card>
     </main>

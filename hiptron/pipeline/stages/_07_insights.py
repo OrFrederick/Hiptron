@@ -12,35 +12,35 @@ import duckdb
 TEMPLATES: dict[tuple[str, str, str], tuple[str, str]] = {
     ("total_distance_m", "down", "older_adult"): (
         "distance_down_older",
-        "You've been taking it easier this week — that's okay.",
+        "Diese Woche etwas ruhiger unterwegs — alles in Ordnung.",
     ),
     ("total_distance_m", "down", "relative"): (
         "distance_down_relative",
-        "Daily walking distance is about {pct_delta:.0f}% lower than the 4-week baseline.",
+        "Tägliche Gehstrecke ist etwa {pct_delta:.0f}% niedriger als der 4-Wochen-Mittelwert.",
     ),
     ("activity_radius_m", "down", "older_adult"): (
         "radius_down_older",
-        "Staying closer to home this week. That's fine — rest matters.",
+        "Diese Woche näher zu Hause geblieben. Pausen sind wichtig.",
     ),
     ("activity_radius_m", "down", "relative"): (
         "radius_down_relative",
-        "Activity radius has dropped ~{pct_delta:.0f}% vs. the baseline.",
+        "Aktionsradius ist ~{pct_delta:.0f}% kleiner als sonst.",
     ),
     ("fatigue_index", "down", "older_adult"): (
         "fatigue_older",
-        "Walks feel a little harder lately — that's normal sometimes.",
+        "Die Spaziergänge fühlen sich gerade etwas anstrengender an — das passiert mal.",
     ),
     ("fatigue_index", "down", "relative"): (
         "fatigue_relative",
-        "Within-walk fatigue signal up: end-of-walk speed ~{pct_delta:.0f}% lower than start.",
+        "Ermüdung während des Gehens steigt: Tempo am Ende ~{pct_delta:.0f}% langsamer als am Anfang.",
     ),
     ("place_count", "down", "older_adult"): (
         "places_older",
-        "Quieter rhythm this week. A short trip to a favourite spot might feel nice.",
+        "Ruhigerer Rhythmus diese Woche. Ein kurzer Besuch an einem Lieblingsort tut vielleicht gut.",
     ),
     ("place_count", "down", "relative"): (
         "places_relative",
-        "Fewer distinct places visited this week than usual.",
+        "Diese Woche weniger verschiedene Orte besucht als sonst.",
     ),
 }
 

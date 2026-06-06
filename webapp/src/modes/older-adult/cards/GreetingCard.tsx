@@ -6,7 +6,7 @@ interface Props {
 }
 
 export function GreetingCard({ greeting, date }: Props) {
-  const formattedDate = new Date(date).toLocaleDateString(undefined, {
+  const formattedDate = new Date(date).toLocaleDateString("de-DE", {
     weekday: "long",
     day: "numeric",
     month: "long",

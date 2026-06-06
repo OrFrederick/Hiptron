@@ -52,3 +52,62 @@ BASELINE_SCENARIO = Scenario(
     outings_per_day=2,
     mean_outing_distance_m=1200.0,
 )
+
+
+DECLINE_SCENARIO = Scenario(
+    user_id="helga",
+    seed=7,
+    weeks=10,
+    home_lat=52.5200,
+    home_lon=13.4050,
+    outings_per_day=2,
+    mean_outing_distance_m=1200.0,
+    distance_decline_pct_per_week=20.0,
+    decline_start_week=4,
+)
+
+
+FATIGUE_SCENARIO = Scenario(
+    user_id="helga",
+    seed=3,
+    weeks=10,
+    home_lat=52.5200,
+    home_lon=13.4050,
+    outings_per_day=2,
+    mean_outing_distance_m=1200.0,
+    fatigue_onset_week=5,
+)
+
+
+SHRINK_SCENARIO = Scenario(
+    user_id="helga",
+    seed=21,
+    weeks=10,
+    home_lat=52.5200,
+    home_lon=13.4050,
+    outings_per_day=2,
+    mean_outing_distance_m=1200.0,
+    place_repertoire_shrink=True,
+)
+
+
+COMBINED_SCENARIO = Scenario(
+    user_id="helga",
+    seed=7,
+    weeks=10,
+    home_lat=52.5200,
+    home_lon=13.4050,
+    outings_per_day=2,
+    mean_outing_distance_m=1200.0,
+    distance_decline_pct_per_week=20.0,
+    decline_start_week=4,
+)
+
+
+SCENARIOS = {
+    "baseline": BASELINE_SCENARIO,
+    "decline": DECLINE_SCENARIO,
+    "fatigue": FATIGUE_SCENARIO,
+    "shrink": SHRINK_SCENARIO,
+    "combined": COMBINED_SCENARIO,
+}

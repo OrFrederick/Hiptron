@@ -10,12 +10,12 @@ import { RoutineBlock } from "./insights/RoutineBlock";
 
 export default function InsightsDetail() {
   const { data, isLoading } = useRelativeInsights();
-  if (isLoading || !data) return <p className="p-6">Loading…</p>;
+  if (isLoading || !data) return <p className="p-6">Lädt…</p>;
 
   return (
     <main className="min-h-screen bg-warm-50 py-6 px-4 max-w-md mx-auto flex flex-col gap-4">
       <Link to="/relative" className="text-warm-800/70 text-sm">
-        ← back
+        ← zurück
       </Link>
       {data.blocks
         .filter((b) => !b.hidden)
@@ -27,12 +27,12 @@ export default function InsightsDetail() {
 }
 
 function BlockFor({ block }: { block: InsightBlock }) {
-  if (block.question.includes("How far"))
+  if (block.feature === "total_distance_m")
     return <DistanceBlock block={block} />;
-  if (block.question.includes("routine")) return <RoutineBlock block={block} />;
-  if (block.question.includes("harder")) return <FatigueBlock block={block} />;
-  if (block.question.includes("Where")) return <PlacesBlock block={block} />;
-  if (block.question.includes("change-points"))
-    return <ChangepointsBlock block={block} />;
+  if (block.feature === "activity_radius_m")
+    return <RoutineBlock block={block} />;
+  if (block.feature === "fatigue_index") return <FatigueBlock block={block} />;
+  if (block.feature === "place_count") return <PlacesBlock block={block} />;
+  if (block.chart_kind === "list") return <ChangepointsBlock block={block} />;
   return null;
 }

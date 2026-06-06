@@ -111,7 +111,7 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
         streak = _streak_days(con, user_id)
         trend = _latest_older_adult_trend_text(con, user_id)
         return OlderAdultHome(
-            greeting="Good morning",
+            greeting=_greeting_de(),
             date=today,
             yesterday_walk=yesterday_walk,
             schematic_map=schematic,
@@ -121,6 +121,15 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
         )
     finally:
         con.close()
+
+
+def _greeting_de() -> str:
+    h = dt.datetime.now().hour
+    if h < 11:
+        return "Guten Morgen"
+    if h < 18:
+        return "Guten Tag"
+    return "Guten Abend"
 
 
 def _streak_days(con: duckdb.DuckDBPyConnection, user_id: str) -> int:
@@ -206,8 +215,8 @@ def relative_home(db_path: Path, user_id: str) -> RelativeHome:
             worth = WorthNoticing(
                 headline=payload["text"],
                 detail=(
-                    f"{payload['feature']} change: baseline "
-                    f"{payload['baseline_mean']:.1f}, now {payload['current_value']:.1f}."
+                    f"{_feature_de(payload['feature'])}: Mittelwert "
+                    f"{payload['baseline_mean']:.1f}, jetzt {payload['current_value']:.1f}."
                 ),
                 feature=payload["feature"],
             )
@@ -216,7 +225,10 @@ def relative_home(db_path: Path, user_id: str) -> RelativeHome:
         ).fetchone()
         last_update = (last_update_row[0] if last_update_row else None) or dt.datetime.now()
 
-        summary = "Routine looks normal." if status == "green" else "Worth noticing this week."
+        summary = (
+            "Routine wirkt unauffällig." if status == "green"
+            else "Diese Woche ist etwas auffällig."
+        )
         return RelativeHome(
             status=status,
             last_update=last_update,
@@ -230,14 +242,23 @@ def relative_home(db_path: Path, user_id: str) -> RelativeHome:
 
 def _trend_headline(points: list[tuple[Any, Any]], baseline_mean: float) -> str:
     if not points or baseline_mean <= 0:
-        return "Not enough data yet."
+        return "Noch nicht genug Daten."
     recent = sum((v or 0.0) for _, v in points) / max(1, len(points))
     delta_pct = (recent - baseline_mean) / baseline_mean * 100.0
     if abs(delta_pct) < 5:
-        return "Walking distance steady this week."
+        return "Gehstrecke diese Woche stabil."
     if delta_pct < 0:
-        return f"Walking distance is ~{abs(delta_pct):.0f}% lower than the 4-week baseline."
-    return f"Walking distance is ~{delta_pct:.0f}% higher than the 4-week baseline."
+        return f"Gehstrecke ist ~{abs(delta_pct):.0f}% niedriger als der 4-Wochen-Mittelwert."
+    return f"Gehstrecke ist ~{delta_pct:.0f}% höher als der 4-Wochen-Mittelwert."
+
+
+def _feature_de(feature: str) -> str:
+    return {
+        "total_distance_m": "Gehstrecke",
+        "activity_radius_m": "Aktionsradius",
+        "fatigue_index": "Ermüdungssignal",
+        "place_count": "Ortsvielfalt",
+    }.get(feature, feature)
 
 
 def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
@@ -251,10 +272,10 @@ def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
 
         blocks: list[InsightBlock] = []
         chart_data: list[tuple[str, str, Literal["line", "bar", "places", "list"]]] = [
-            ("total_distance_m", "How far is Helga going?", "bar"),
-            ("activity_radius_m", "Is the daily routine holding?", "line"),
-            ("fatigue_index", "Are walks getting harder?", "line"),
-            ("place_count", "Where has she been?", "places"),
+            ("total_distance_m", "Wie weit geht Helga?", "bar"),
+            ("activity_radius_m", "Bleibt der Tagesrhythmus stabil?", "line"),
+            ("fatigue_index", "Werden die Spaziergänge anstrengender?", "line"),
+            ("place_count", "Wo war sie unterwegs?", "places"),
         ]
         for feature, question, chart_kind in chart_data:
             series_rows = con.execute(
@@ -286,6 +307,7 @@ def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
                         for d, v in series_rows
                     ],
                     hidden=hidden,
+                    feature=feature,
                 )
             )
 
@@ -299,13 +321,13 @@ def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
             (user_id,),
         ).fetchall()
         cp_verdict = (
-            "Nothing has changed enough to mention."
+            "Keine nennenswerten Veränderungen."
             if not cp_rows
-            else f"{len(cp_rows)} change-point(s) detected recently."
+            else f"{len(cp_rows)} Veränderungspunkt(e) zuletzt erkannt."
         )
         blocks.append(
             InsightBlock(
-                question="Any change-points lately?",
+                question="Gab es kürzlich Veränderungen?",
                 verdict=cp_verdict,
                 chart_kind="list",
                 series=[
@@ -328,19 +350,14 @@ def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
 
 def _block_verdict(feature: str, series: list[tuple[Any, Any]], baseline_mean: float) -> str:
     if not series or baseline_mean <= 0:
-        return "Not enough data yet."
+        return "Noch nicht genug Daten."
     recent_vals = [v for _, v in series[-7:] if v is not None]
     if not recent_vals:
-        return "Not enough data yet."
+        return "Noch nicht genug Daten."
     recent = sum(recent_vals) / len(recent_vals)
     delta = (recent - baseline_mean) / baseline_mean * 100.0
-    name = {
-        "total_distance_m": "distance",
-        "activity_radius_m": "activity radius",
-        "fatigue_index": "fatigue signal",
-        "place_count": "place variety",
-    }[feature]
+    name = _feature_de(feature)
     if abs(delta) < 7:
-        return f"{name.capitalize()} is steady."
-    direction = "down" if delta < 0 else "up"
-    return f"{name.capitalize()} is {abs(delta):.0f}% {direction} vs. baseline."
+        return f"{name} ist stabil."
+    direction = "niedriger" if delta < 0 else "höher"
+    return f"{name} ist {abs(delta):.0f}% {direction} als der Mittelwert."
