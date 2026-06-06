@@ -71,6 +71,8 @@ HELGA_SCENARIO = Scenario(
 OTTO_SCENARIO = Scenario(
     user_id="otto",
     seed=55,
+    # 16 weeks (vs 12 for the others): the place-repertoire shrink needs the
+    # extra span for a place_count changepoint to clear the detection threshold.
     weeks=16,
     home_lat=50.7753,
     home_lon=6.0839,
@@ -92,6 +94,9 @@ MARGARETE_SCENARIO = Scenario(
 
 INGRID_SCENARIO = Scenario(
     user_id="ingrid",
+    # Healthy control: no decline knobs. seed 63 chosen empirically because it
+    # yields no spurious changepoints at the current detection thresholds, so
+    # ingrid stays the demo's "all-clear" persona.
     seed=63,
     weeks=12,
     home_lat=53.5511,
