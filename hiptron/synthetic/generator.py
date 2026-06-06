@@ -46,7 +46,8 @@ def generate(scenario: Scenario, con: duckdb.DuckDBPyConnection) -> None:
         week_idx = (day - start.date()).days // 7
         decline_factor = _decline_factor(scenario, week_idx)
         places = _places_for_week(scenario, week_idx, rng)
-        for _ in range(scenario.outings_per_day):
+        n_out = _outings_for_week(scenario, week_idx)
+        for _ in range(n_out):
             place = _pick_place(places, day, rng)
             if place is None:
                 continue
@@ -73,13 +74,24 @@ def _decline_factor(scenario: Scenario, week_idx: int) -> float:
     )
 
 
+def _outings_for_week(scenario: Scenario, week_idx: int) -> int:
+    base = scenario.outings_per_day
+    start = scenario.outings_decline_start_week
+    if start is None or week_idx < start:
+        return base
+    # Drop ~1 outing every 3 weeks after start, floor at 1.
+    weeks_in = week_idx - start
+    return max(1, base - 1 - weeks_in // 3)
+
+
 def _places_for_week(
     scenario: Scenario, week_idx: int, rng: random.Random
 ) -> tuple[NamedPlace, ...]:
+    base = scenario.places if scenario.places is not None else DEFAULT_PLACES
     if not scenario.place_repertoire_shrink:
-        return DEFAULT_PLACES
-    keep = max(2, len(DEFAULT_PLACES) - week_idx // 2)
-    return DEFAULT_PLACES[:keep]
+        return base
+    keep = max(2, len(base) - week_idx // 2)
+    return base[:keep]
 
 
 def _pick_place(

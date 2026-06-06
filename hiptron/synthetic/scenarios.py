@@ -25,6 +25,8 @@ class Scenario:
     decline_start_week: int | None = None
     fatigue_onset_week: int | None = None
     place_repertoire_shrink: bool = False
+    outings_decline_start_week: int | None = None
+    places: tuple["NamedPlace", ...] | None = None
     end_dt: datetime | None = None
 
     def end(self) -> datetime:
