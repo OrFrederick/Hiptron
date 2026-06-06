@@ -8,9 +8,9 @@ import RelativeHome from "../../src/modes/relative/Home";
 const fakeHome = {
   status: "green",
   last_update: "2026-05-24T08:00:00",
-  summary: "Routine looks normal.",
+  summary: "Routine wirkt unauffällig.",
   weekly_trend: {
-    headline: "Walking distance steady this week.",
+    headline: "Gehstrecke diese Woche stabil.",
     points: [
       { date: "2026-05-18", value: 1200 },
       { date: "2026-05-19", value: 1100 },
@@ -41,11 +41,16 @@ beforeEach(() => {
 describe("Relative Home", () => {
   it("shows status dot, trend headline, no worth-noticing card, privacy footer", async () => {
     renderHome();
+    // StatusCard renders summary directly from API
     await waitFor(() =>
-      expect(screen.getByText(/Routine looks normal/i)).toBeInTheDocument(),
+      expect(screen.getByText(/Routine wirkt unauffällig/i)).toBeInTheDocument(),
     );
-    expect(screen.getByText(/steady this week/i)).toBeInTheDocument();
-    expect(screen.queryByText(/worth noticing/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/Helga controls/i)).toBeInTheDocument();
+    // WeeklyTrendCard renders headline directly from API
+    expect(screen.getByText(/Gehstrecke diese Woche stabil/i)).toBeInTheDocument();
+    // WorthNoticingCard should not render when worth_noticing is null
+    // "7 Tage stummschalten" is a button unique to WorthNoticingCard
+    expect(screen.queryByText(/7 Tage stummschalten/i)).not.toBeInTheDocument();
+    // FooterPrivacyCard German text
+    expect(screen.getByText(/Helga bestimmt/i)).toBeInTheDocument();
   });
 });

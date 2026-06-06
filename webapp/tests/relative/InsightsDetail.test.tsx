@@ -9,8 +9,9 @@ const fake = {
   user_id: "helga",
   blocks: [
     {
-      question: "How far is Helga going?",
-      verdict: "Distance is steady.",
+      feature: "total_distance_m",
+      question: "Wie weit geht Helga?",
+      verdict: "Gehstrecke ist stabil.",
       chart_kind: "bar",
       series: [
         { date: "2026-05-18", value: 1100, baseline: 1150 },
@@ -19,22 +20,25 @@ const fake = {
       hidden: false,
     },
     {
-      question: "Is the daily routine holding?",
-      verdict: "Routine holding.",
+      feature: "activity_radius_m",
+      question: "Hält die Tagesroutine an?",
+      verdict: "Routine stabil.",
       chart_kind: "line",
       series: [{ date: "2026-05-18", value: 0.9, baseline: 0.92 }],
       hidden: false,
     },
     {
-      question: "Are walks getting harder?",
-      verdict: "Fatigue signal stable.",
-      chart_kind: "line",
+      feature: "n_outings",
+      question: "Wie viele Ausgänge pro Tag?",
+      verdict: "Anzahl der Ausgänge stabil.",
+      chart_kind: "bar",
       series: [],
       hidden: true,
     },
     {
-      question: "Where has she been?",
-      verdict: "Bakery and park most days.",
+      feature: "place_count",
+      question: "Wo war sie unterwegs?",
+      verdict: "Bäckerei und Park an den meisten Tagen.",
       chart_kind: "places",
       series: [
         { label: "bakery", count: 5 },
@@ -43,8 +47,9 @@ const fake = {
       hidden: false,
     },
     {
-      question: "Any change-points lately?",
-      verdict: "Nothing has changed enough to mention.",
+      feature: null,
+      question: "Gab es Veränderungen?",
+      verdict: "Keine auffälligen Veränderungen.",
       chart_kind: "list",
       series: [],
       hidden: false,
@@ -73,13 +78,16 @@ beforeEach(() => {
 describe("Insights Detail", () => {
   it("renders question + verdict per visible block, hides hidden blocks", async () => {
     renderView();
+    // DistanceBlock renders the question from the mock block (feature: "total_distance_m")
     await waitFor(() =>
-      expect(screen.getByText(/How far is Helga going/i)).toBeInTheDocument(),
+      expect(screen.getByText(/Wie weit geht Helga/i)).toBeInTheDocument(),
     );
-    expect(screen.getByText(/Distance is steady/)).toBeInTheDocument();
+    expect(screen.getByText(/Gehstrecke ist stabil/i)).toBeInTheDocument();
+    // n_outings block is hidden — its question should not appear
     expect(
-      screen.queryByText(/Are walks getting harder/i),
+      screen.queryByText(/Wie viele Ausgänge/i),
     ).not.toBeInTheDocument();
-    expect(screen.getByText(/Nothing has changed enough/i)).toBeInTheDocument();
+    // ChangepointsBlock (chart_kind: "list") renders its verdict
+    expect(screen.getByText(/Keine auffälligen Veränderungen/i)).toBeInTheDocument();
   });
 });

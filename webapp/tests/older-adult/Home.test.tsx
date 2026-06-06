@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import Home from "../../src/modes/older-adult/Home";
 
 const fakeHome = {
-  greeting: "Good morning",
+  greeting: "Guten Morgen",
   date: "2026-05-24",
   yesterday_walk: {
     walk_id: "w1",
@@ -22,7 +22,7 @@ const fakeHome = {
     walk_polyline: [[52.52, 13.4]],
   },
   streak_days: 5,
-  family_note: "Anna sent a heart for your walk yesterday",
+  family_note: "Anna hat ein Herz für deinen gestrigen Spaziergang gesendet",
   trend_card: null,
 };
 
@@ -48,10 +48,12 @@ describe("Older-Adult Home", () => {
   it("shows greeting, distance, streak, family note", async () => {
     renderHome();
     await waitFor(() =>
-      expect(screen.getByText(/Good morning/i)).toBeInTheDocument(),
+      expect(screen.getByText(/Guten Morgen/i)).toBeInTheDocument(),
     );
-    expect(screen.getByText(/1\.45 km/)).toBeInTheDocument();
-    expect(screen.getByText(/5 days in a row/i)).toBeInTheDocument();
-    expect(screen.getByText(/Anna sent a heart/i)).toBeInTheDocument();
+    // YesterdayWalkCard formats distance with German decimal comma
+    expect(screen.getByText(/1,45 km/)).toBeInTheDocument();
+    // StreakCard renders "N Tage in Folge draußen."
+    expect(screen.getByText(/5 Tage in Folge/i)).toBeInTheDocument();
+    expect(screen.getByText(/Anna hat ein Herz/i)).toBeInTheDocument();
   });
 });

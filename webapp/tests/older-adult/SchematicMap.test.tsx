@@ -32,9 +32,10 @@ describe("SchematicMap", () => {
         }}
       />,
     );
-    expect(screen.getByLabelText(/home/i)).toBeInTheDocument();
-    expect(screen.getByText("bakery")).toBeInTheDocument();
-    expect(screen.getByText("park")).toBeInTheDocument();
-    expect(screen.getByLabelText(/walk path/i)).toBeInTheDocument();
+    // aria-labels and place text are German per LABEL_DE map in SchematicMap.tsx
+    expect(screen.getByLabelText("Zuhause")).toBeInTheDocument();
+    expect(screen.getByText("Bäckerei")).toBeInTheDocument();
+    expect(screen.getByText("Park")).toBeInTheDocument();
+    expect(screen.getByLabelText("Spazierweg")).toBeInTheDocument();
   });
 });
