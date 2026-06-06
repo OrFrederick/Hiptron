@@ -70,8 +70,8 @@ HELGA_SCENARIO = Scenario(
 
 OTTO_SCENARIO = Scenario(
     user_id="otto",
-    seed=21,
-    weeks=12,
+    seed=55,
+    weeks=16,
     home_lat=50.7753,
     home_lon=6.0839,
     outings_per_day=2,
@@ -92,7 +92,7 @@ MARGARETE_SCENARIO = Scenario(
 
 INGRID_SCENARIO = Scenario(
     user_id="ingrid",
-    seed=99,
+    seed=63,
     weeks=12,
     home_lat=53.5511,
     home_lon=9.9937,
