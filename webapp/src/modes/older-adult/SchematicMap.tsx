@@ -10,8 +10,8 @@ interface Props {
   map: SchematicMapType;
 }
 
-const VIEW_SIZE = 320;
-const PADDING = 32;
+export const VIEW_SIZE = 320;
+export const PADDING = 32;
 
 const LABEL_DE: Record<string, string> = {
   bakery: "Bäckerei",
@@ -164,7 +164,7 @@ export function SchematicMap({ map }: Props) {
   );
 }
 
-function projectPoints(map: SchematicMapType) {
+export function projectPoints(map: SchematicMapType) {
   const places = dedupePlaces(map.places);
   const all: [number, number][] = [
     [map.home_lat, map.home_lon],
@@ -180,10 +180,13 @@ function projectPoints(map: SchematicMapType) {
   const dLat = Math.max(1e-6, maxLat - minLat);
   const dLon = Math.max(1e-6, maxLon - minLon);
   const inner = VIEW_SIZE - PADDING * 2;
+  const lo = PADDING;
+  const hi = VIEW_SIZE - PADDING;
+  const clamp = (n: number) => Math.min(hi, Math.max(lo, n));
   const project = (lat: number, lon: number): [number, number] => {
     const x = PADDING + ((lon - minLon) / dLon) * inner;
     const y = VIEW_SIZE - PADDING - ((lat - minLat) / dLat) * inner;
-    return [x, y];
+    return [clamp(x), clamp(y)];
   };
   return {
     homePx: project(map.home_lat, map.home_lon),
