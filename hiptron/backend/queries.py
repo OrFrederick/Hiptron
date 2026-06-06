@@ -256,9 +256,18 @@ def _feature_de(feature: str) -> str:
     return {
         "total_distance_m": "Gehstrecke",
         "activity_radius_m": "Aktionsradius",
-        "fatigue_index": "Ermüdungssignal",
+        "n_outings": "Ausgänge",
         "place_count": "Ortsvielfalt",
     }.get(feature, feature)
+
+
+def _display_name(user_id: str) -> str:
+    return {
+        "helga": "Helga",
+        "otto": "Otto",
+        "margarete": "Margarete",
+        "ingrid": "Ingrid",
+    }.get(user_id, user_id.capitalize())
 
 
 def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
@@ -271,10 +280,11 @@ def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
         ref_date = ref_date_row[0] if ref_date_row and ref_date_row[0] else dt.date.today()
 
         blocks: list[InsightBlock] = []
+        name = _display_name(user_id)
         chart_data: list[tuple[str, str, Literal["line", "bar", "places", "list"]]] = [
-            ("total_distance_m", "Wie weit geht Helga?", "bar"),
-            ("activity_radius_m", "Bleibt der Tagesrhythmus stabil?", "line"),
-            ("fatigue_index", "Werden die Spaziergänge anstrengender?", "line"),
+            ("total_distance_m", f"Wie weit geht {name}?", "bar"),
+            ("activity_radius_m", "Bleibt der Aktionsradius gleich?", "line"),
+            ("n_outings", "Geht sie regelmäßig raus?", "bar"),
             ("place_count", "Wo war sie unterwegs?", "places"),
         ]
         for feature, question, chart_kind in chart_data:

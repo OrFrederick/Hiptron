@@ -26,13 +26,13 @@ TEMPLATES: dict[tuple[str, str, str], tuple[str, str]] = {
         "radius_down_relative",
         "Aktionsradius ist ~{pct_delta:.0f}% kleiner als sonst.",
     ),
-    ("fatigue_index", "down", "older_adult"): (
-        "fatigue_older",
-        "Die Spaziergänge fühlen sich gerade etwas anstrengender an — das passiert mal.",
+    ("n_outings", "down", "older_adult"): (
+        "outings_down_older",
+        "Diese Woche etwas weniger draußen — ganz nach Gefühl.",
     ),
-    ("fatigue_index", "down", "relative"): (
-        "fatigue_relative",
-        "Ermüdung während des Gehens steigt: Tempo am Ende ~{pct_delta:.0f}% langsamer als am Anfang.",
+    ("n_outings", "down", "relative"): (
+        "outings_down_relative",
+        "Geht aktuell ~{pct_delta:.0f}% seltener raus als im 4-Wochen-Mittel.",
     ),
     ("place_count", "down", "older_adult"): (
         "places_older",

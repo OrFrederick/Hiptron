@@ -10,7 +10,7 @@ import duckdb
 TRACKED_FEATURES = (
     "total_distance_m",
     "activity_radius_m",
-    "fatigue_index",
+    "n_outings",
     "place_count",
 )
 SUSTAINED_DAYS = 4
