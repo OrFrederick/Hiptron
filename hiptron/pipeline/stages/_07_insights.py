@@ -16,7 +16,7 @@ TEMPLATES: dict[tuple[str, str, str], tuple[str, str]] = {
     ),
     ("total_distance_m", "down", "relative"): (
         "distance_down_relative",
-        "Tägliche Gehstrecke ist etwa {pct_delta:.0f}% niedriger als der 4-Wochen-Mittelwert.",
+        "Tägliche Gehstrecke ist etwa {abs_pct_delta:.0f}% niedriger als der 4-Wochen-Mittelwert.",
     ),
     ("activity_radius_m", "down", "older_adult"): (
         "radius_down_older",
@@ -24,7 +24,7 @@ TEMPLATES: dict[tuple[str, str, str], tuple[str, str]] = {
     ),
     ("activity_radius_m", "down", "relative"): (
         "radius_down_relative",
-        "Aktionsradius ist ~{pct_delta:.0f}% kleiner als sonst.",
+        "Aktionsradius ist ~{abs_pct_delta:.0f}% kleiner als sonst.",
     ),
     ("n_outings", "down", "older_adult"): (
         "outings_down_older",
@@ -32,7 +32,7 @@ TEMPLATES: dict[tuple[str, str, str], tuple[str, str]] = {
     ),
     ("n_outings", "down", "relative"): (
         "outings_down_relative",
-        "Geht aktuell ~{pct_delta:.0f}% seltener raus als im 4-Wochen-Mittel.",
+        "Geht aktuell ~{abs_pct_delta:.0f}% seltener raus als im 4-Wochen-Mittel.",
     ),
     ("place_count", "down", "older_adult"): (
         "places_older",
@@ -74,6 +74,7 @@ def generate_insights(con: duckdb.DuckDBPyConnection) -> None:
             "baseline_mean": baseline_mean,
             "current_value": current_value,
             "pct_delta": pct_delta,
+            "abs_pct_delta": abs(pct_delta),
             "window_weeks": 4,
         }
         for audience in ("older_adult", "relative"):
