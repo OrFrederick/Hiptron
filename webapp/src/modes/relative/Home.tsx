@@ -1,6 +1,6 @@
 import { useRelativeHome } from "../../shared/api";
 import { PersonaSwitcher } from "../../shared/PersonaSwitcher";
-import { usePersona } from "../../shared/persona";
+import { personaName, usePersona } from "../../shared/persona";
 import { FooterPrivacyCard } from "./cards/FooterPrivacyCard";
 import { StatusCard } from "./cards/StatusCard";
 import { WeeklyTrendCard } from "./cards/WeeklyTrendCard";
@@ -22,7 +22,7 @@ export default function RelativeHome() {
       />
       <WeeklyTrendCard trend={data.weekly_trend} />
       {data.worth_noticing && <WorthNoticingCard item={data.worth_noticing} />}
-      <FooterPrivacyCard />
+      <FooterPrivacyCard name={personaName(userId)} />
     </main>
   );
 }
