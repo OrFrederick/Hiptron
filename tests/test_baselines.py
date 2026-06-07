@@ -12,7 +12,7 @@ from hiptron.synthetic.scenarios import BASELINE_SCENARIO
 TRACKED_FEATURES = {
     "total_distance_m",
     "activity_radius_m",
-    "fatigue_index",
+    "n_outings",
     "place_count",
 }
 
