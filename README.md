@@ -17,7 +17,7 @@ The point: detect and explain gradual changes in everyday walking patterns *befo
 ```bash
 just install                       # uv sync + pnpm install
 just pipeline run --stage all      # populates data/hiptron.duckdb (~3 min)
-just backend                       # FastAPI on :8000
+just backend                       # FastAPI on :8001 (matches the Vite /api proxy)
 just dev                           # Vite dev server on :5173
 ```
 

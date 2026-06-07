@@ -9,5 +9,27 @@
 
 body {
   -webkit-font-smoothing: antialiased;
-  color: theme(colors.warm.800);
+  color: theme(colors.ink.DEFAULT);
+  background: theme(colors.appbg);
+}
+
+@keyframes hipPulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes hipShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }

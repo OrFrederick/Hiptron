@@ -18,6 +18,9 @@ const fakeHome = {
     baseline_mean: 1150,
   },
   worth_noticing: null,
+  schematic_map: null,
+  recent_outings: [],
+  home_label: "Zuhause",
 };
 
 function renderHome() {
@@ -39,18 +42,19 @@ beforeEach(() => {
 });
 
 describe("Relative Home", () => {
-  it("shows status dot, trend headline, no worth-noticing card, privacy footer", async () => {
+  it("shows status, summary, trend headline, no worth-noticing card, privacy footer", async () => {
     renderHome();
-    // StatusCard renders summary directly from API
+    // RelativeHeader renders the summary as subtext
     await waitFor(() =>
       expect(screen.getByText(/Routine wirkt unauffällig/i)).toBeInTheDocument(),
     );
+    // Green status pill copy
+    expect(screen.getByText(/Alles sieht gut aus/i)).toBeInTheDocument();
     // WeeklyTrendCard renders headline directly from API
     expect(screen.getByText(/Gehstrecke diese Woche stabil/i)).toBeInTheDocument();
     // WorthNoticingCard should not render when worth_noticing is null
-    // "7 Tage stummschalten" is a button unique to WorthNoticingCard
     expect(screen.queryByText(/7 Tage stummschalten/i)).not.toBeInTheDocument();
-    // FooterPrivacyCard German text
-    expect(screen.getByText(/Helga bestimmt/i)).toBeInTheDocument();
+    // FooterPrivacyCard updated German text (route shared, no live tracking)
+    expect(screen.getByText(/teilt diese Einblicke/i)).toBeInTheDocument();
   });
 });

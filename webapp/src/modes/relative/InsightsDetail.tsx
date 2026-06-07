@@ -1,7 +1,11 @@
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { useRelativeInsights } from "../../shared/api";
-import { usePersona } from "../../shared/persona";
+import { SlimNavyHeader } from "../../shared/kit";
+import { personaName, usePersona } from "../../shared/persona";
+import { Shell } from "../../shared/Shell";
+import { ErrorState, LoadingState } from "../../shared/states";
+import { HIP } from "../../shared/theme";
 import type { InsightBlock } from "../../shared/types";
 import { ChangepointsBlock } from "./insights/ChangepointsBlock";
 import { DistanceBlock } from "./insights/DistanceBlock";
@@ -9,22 +13,32 @@ import { OutingsBlock } from "./insights/OutingsBlock";
 import { PlacesBlock } from "./insights/PlacesBlock";
 import { RoutineBlock } from "./insights/RoutineBlock";
 
+const c = HIP.c;
+
 export default function InsightsDetail() {
   const userId = usePersona();
-  const { data, isLoading } = useRelativeInsights(userId);
-  if (isLoading || !data) return <p className="p-6">Lädt…</p>;
+  const navigate = useNavigate();
+  const { data, isLoading, isError } = useRelativeInsights(userId);
+
+  if (isLoading) return <LoadingState text="Lädt…" />;
+  if (isError || !data) return <ErrorState />;
+
+  const name = personaName(userId);
 
   return (
-    <main className="min-h-screen bg-warm-50 py-6 px-4 max-w-md mx-auto flex flex-col gap-4">
-      <Link to={`/relative?u=${userId}`} className="text-warm-800/70 text-sm">
-        ← zurück
-      </Link>
+    <Shell active="statistik">
+      <SlimNavyHeader title="Einblicke" onBack={() => navigate(`/relative?u=${userId}`)} />
+
       {data.blocks
         .filter((b) => !b.hidden)
         .map((b) => (
           <BlockFor key={b.question} block={b} />
         ))}
-    </main>
+
+      <div style={{ textAlign: "center", fontSize: 13.5, color: c.textMuted, lineHeight: 1.5, marginTop: 2, marginBottom: 4 }}>
+        {name} teilt diese Einblicke mit dir.
+      </div>
+    </Shell>
   );
 }
 

@@ -9,7 +9,7 @@ pipeline *args:
     uv run python -m hiptron.pipeline run {{args}}
 
 backend:
-    uv run uvicorn hiptron.backend.main:app --reload --port 8000
+    uv run uvicorn hiptron.backend.main:app --reload --port 8001
 
 dev:
     cd webapp && pnpm dev

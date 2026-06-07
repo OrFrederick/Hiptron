@@ -1,39 +1,73 @@
-import { Card } from "../../../shared/Card";
-import type { InsightBlock } from "../../../shared/types";
+import { Ic } from "../../../shared/Icon";
+import { InsightBlock } from "../../../shared/kit";
+import { HIP } from "../../../shared/theme";
+import type { InsightBlock as InsightBlockData } from "../../../shared/types";
+
+const c = HIP.c;
 
 const FEATURE_DE: Record<string, string> = {
   total_distance_m: "Gehstrecke",
   activity_radius_m: "Aktionsradius",
-  fatigue_index: "Ermüdung",
+  n_outings: "Ausgänge",
   place_count: "Ortsvielfalt",
 };
 const DIRECTION_DE: Record<string, string> = {
-  down: "gesunken",
-  up: "gestiegen",
+  down: "etwas weniger",
+  up: "etwas mehr",
 };
 
-export function ChangepointsBlock({ block }: { block: InsightBlock }) {
+export function ChangepointsBlock({ block }: { block: InsightBlockData }) {
+  const items = block.series;
   return (
-    <Card>
-      <p className="text-warm-800/70 text-sm uppercase tracking-wide">
-        {block.question}
-      </p>
-      <p className="text-lg font-medium mt-1">{block.verdict}</p>
-      {block.series.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-2 text-sm text-warm-800/80">
-          {block.series.map((row, i) => {
-            const f = FEATURE_DE[String(row.feature)] ?? String(row.feature);
-            const d = DIRECTION_DE[String(row.direction)] ?? String(row.direction);
+    <InsightBlock question={block.question} verdict={block.verdict}>
+      {items.length === 0 ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 13, padding: "4px 2px" }}>
+          <span
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: "50%",
+              background: c.green50,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Ic name="check" size={18} color={c.green600} sw={2.4} />
+          </span>
+          <div style={{ fontSize: 15.5, color: c.textMuted, lineHeight: 1.5 }}>
+            Nichts hat sich genug verändert, um es zu erwähnen.
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {items.map((row, i) => {
+            const feature = FEATURE_DE[String(row.feature)] ?? String(row.feature);
+            const dir = DIRECTION_DE[String(row.direction)] ?? String(row.direction);
             return (
-              <li key={i}>
-                {String(row.detected_at)} — {f} {d}: Mittelwert{" "}
-                {Number(row.baseline_mean).toFixed(1)} →{" "}
-                {Number(row.current_value).toFixed(1)}
-              </li>
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 13,
+                  padding: "12px 0",
+                  borderBottom: i === items.length - 1 ? "none" : `1px solid ${c.line}`,
+                }}
+              >
+                <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.blue600, opacity: 0.85, marginTop: 6, flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 16, fontWeight: 500, color: c.textDark, lineHeight: 1.4 }}>
+                    {feature}: {dir} als sonst
+                  </div>
+                  <div style={{ fontSize: 13.5, color: c.textMuted, marginTop: 2 }}>{String(row.detected_at)}</div>
+                </div>
+              </div>
             );
           })}
-        </ul>
+        </div>
       )}
-    </Card>
+    </InsightBlock>
   );
 }

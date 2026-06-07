@@ -7,8 +7,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { Card } from "../../../shared/Card";
-import { Sentence } from "../../../shared/Sentence";
+import { Card } from "../../../shared/kit";
 import type { WeeklyTrend } from "../../../shared/types";
 
 interface Props {
@@ -22,22 +21,24 @@ export function WeeklyTrendCard({ trend }: Props) {
   }));
   return (
     <Card>
-      <Sentence text={trend.headline} className="font-medium mb-3" />
+      <p className="text-[17px] font-medium leading-snug text-ink mb-3">
+        {trend.headline}
+      </p>
       <div className="h-40">
         <ResponsiveContainer>
           <BarChart data={data}>
-            <XAxis dataKey="date" />
+            <XAxis dataKey="date" tick={{ fill: "#6B7686", fontSize: 12 }} />
             <YAxis hide />
-            <Bar dataKey="value" fill="#7BA688" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="value" fill="#1F5FE0" radius={[5, 5, 0, 0]} />
             <ReferenceLine
               y={trend.baseline_mean}
-              stroke="#3D2F22"
+              stroke="#6B7686"
               strokeDasharray="3 3"
             />
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <p className="text-xs text-warm-800/60 mt-2">
+      <p className="text-xs text-ink-muted mt-2">
         Balken = Tagesstrecke. Gestrichelte Linie = 4-Wochen-Mittelwert.
       </p>
     </Card>

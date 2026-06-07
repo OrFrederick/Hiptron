@@ -50,9 +50,9 @@ describe("Older-Adult Home", () => {
     await waitFor(() =>
       expect(screen.getByText(/Guten Morgen/i)).toBeInTheDocument(),
     );
-    // YesterdayWalkCard formats distance with German decimal comma
-    expect(screen.getByText(/1,45 km/)).toBeInTheDocument();
-    // StreakCard renders "N Tage in Folge draußen."
+    // Checklist row formats yesterday distance (German decimal comma)
+    expect(screen.getByText(/1,5 km gestern/i)).toBeInTheDocument();
+    // Streak checklist row "N Tage in Folge draußen"
     expect(screen.getByText(/5 Tage in Folge/i)).toBeInTheDocument();
     expect(screen.getByText(/Anna hat ein Herz/i)).toBeInTheDocument();
   });

@@ -30,6 +30,18 @@ def test_older_adult_home_returns_cards(populated_db: Path):
     assert "yesterday_walk" in body
     assert "schematic_map" in body
     assert "streak_days" in body
+    # Senior week view feeds off week_distances (mirrors relative weekly_trend)
+    assert body["week_distances"] is not None
+    assert isinstance(body["week_distances"]["points"], list)
+
+
+def test_older_adult_home_places_carry_visit_counts(populated_db: Path):
+    client = TestClient(create_app(populated_db))
+    r = client.get("/api/older-adult/home", params={"user_id": "helga"})
+    places = (r.json().get("schematic_map") or {}).get("places", [])
+    assert places, "expected at least one schematic place"
+    assert all("visits" in p for p in places)
+    assert any(p["visits"] > 0 for p in places)
 
 
 def test_relative_home_returns_status(populated_db: Path):
@@ -48,3 +60,10 @@ def test_relative_insights_detail(populated_db: Path):
     body = r.json()
     assert "blocks" in body
     assert isinstance(body["blocks"], list)
+    place_block = next(
+        (b for b in body["blocks"] if b.get("feature") == "place_count"), None
+    )
+    assert place_block is not None
+    # Places block carries per-place frequency rows (label + count), not a daily series
+    for row in place_block["series"]:
+        assert "label" in row and "count" in row

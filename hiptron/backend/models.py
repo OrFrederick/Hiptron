@@ -11,6 +11,7 @@ class Place(BaseModel):
     label: str
     centroid_lat: float
     centroid_lon: float
+    visits: int = 0
 
 
 class WalkSummary(BaseModel):
@@ -28,16 +29,6 @@ class SchematicMap(BaseModel):
     walk_polyline: list[tuple[float, float]]
 
 
-class OlderAdultHome(BaseModel):
-    greeting: str
-    date: dt.date
-    yesterday_walk: WalkSummary | None
-    schematic_map: SchematicMap | None
-    streak_days: int
-    family_note: str | None
-    trend_card: str | None
-
-
 class WeeklyTrendPoint(BaseModel):
     date: dt.date
     value: float
@@ -47,6 +38,17 @@ class WeeklyTrend(BaseModel):
     headline: str
     points: list[WeeklyTrendPoint]
     baseline_mean: float
+
+
+class OlderAdultHome(BaseModel):
+    greeting: str
+    date: dt.date
+    yesterday_walk: WalkSummary | None
+    schematic_map: SchematicMap | None
+    streak_days: int
+    family_note: str | None
+    trend_card: str | None
+    week_distances: WeeklyTrend | None = None
 
 
 class WorthNoticing(BaseModel):
@@ -61,6 +63,9 @@ class RelativeHome(BaseModel):
     summary: str
     weekly_trend: WeeklyTrend
     worth_noticing: WorthNoticing | None
+    schematic_map: SchematicMap | None = None
+    recent_outings: list[WalkSummary] = []
+    home_label: str = "Zuhause"
 
 
 class InsightBlock(BaseModel):

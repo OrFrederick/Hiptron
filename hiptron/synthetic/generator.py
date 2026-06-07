@@ -10,6 +10,13 @@ from hiptron.synthetic.scenarios import DEFAULT_PLACES, NamedPlace, Scenario
 
 METERS_PER_DEG_LAT = 111_320.0
 
+# Transit fixes are spaced wide enough (> the 10 m dwell threshold in the place
+# clusterer) that the moving leg is never mistaken for a stop; the standing-still
+# dwell at the destination carries the bulk of the GPS volume instead.
+TRANSIT_STEP_M = 22.0
+TRANSIT_STEP_S = 15
+DWELL_SAMPLE_S = 10
+
 
 def _m_to_deg_lat(m: float) -> float:
     return m / METERS_PER_DEG_LAT
@@ -25,21 +32,12 @@ def generate(scenario: Scenario, con: duckdb.DuckDBPyConnection) -> None:
     rows: list[tuple[str, datetime, float, float, float]] = []
 
     start = scenario.start().replace(hour=0, minute=0, second=0, microsecond=0)
-
-    cur = start
     end = scenario.end()
-    while cur < end:
-        rows.append(
-            (
-                scenario.user_id,
-                cur,
-                scenario.home_lat + rng.gauss(0, 2e-6),
-                scenario.home_lon + rng.gauss(0, 2e-6),
-                6.0,
-            )
-        )
-        cur += timedelta(minutes=5)
 
+    # Outings first: each returns the time window it occupies so the home idle
+    # stream can avoid placing the user at home while they are actually out (which
+    # would otherwise smear the walk polyline back to home every few minutes).
+    outing_spans: list[tuple[datetime, datetime]] = []
     day = start.date()
     end_date = end.date()
     while day <= end_date:
@@ -47,15 +45,49 @@ def generate(scenario: Scenario, con: duckdb.DuckDBPyConnection) -> None:
         decline_factor = _decline_factor(scenario, week_idx)
         places = _places_for_week(scenario, week_idx, rng)
         n_out = _outings_for_week(scenario, week_idx)
+        picks: list[tuple[datetime, NamedPlace]] = []
         for _ in range(n_out):
             place = _pick_place(places, day, rng)
             if place is None:
                 continue
-            start_dt = datetime.combine(day, datetime.min.time()) + timedelta(
+            intended = datetime.combine(day, datetime.min.time()) + timedelta(
                 hours=place.typical_hour, minutes=rng.randint(-30, 30)
             )
-            _emit_outing(rows, scenario, place, start_dt, decline_factor, rng)
+            picks.append((intended, place))
+        # Serialise the day's outings so they never overlap in time: an overlap
+        # would make the walk segmenter chain two trips into one giant walk.
+        picks.sort(key=lambda p: p[0])
+        next_free: datetime | None = None
+        for intended, place in picks:
+            start_dt = intended
+            if next_free is not None and start_dt < next_free:
+                start_dt = next_free
+            end_dt = _emit_outing(rows, scenario, place, start_dt, decline_factor, rng)
+            outing_spans.append((start_dt, end_dt))
+            next_free = end_dt + timedelta(minutes=15)
         day += timedelta(days=1)
+
+    outing_spans.sort()
+    span_idx = 0
+    cur = start
+    while cur < end:
+        while span_idx < len(outing_spans) and outing_spans[span_idx][1] < cur:
+            span_idx += 1
+        out = (
+            span_idx < len(outing_spans)
+            and outing_spans[span_idx][0] <= cur <= outing_spans[span_idx][1]
+        )
+        if not out:
+            rows.append(
+                (
+                    scenario.user_id,
+                    cur,
+                    scenario.home_lat + rng.gauss(0, 2e-6),
+                    scenario.home_lon + rng.gauss(0, 2e-6),
+                    6.0,
+                )
+            )
+        cur += timedelta(minutes=5)
 
     con.executemany("INSERT OR REPLACE INTO gps_fixes VALUES (?, ?, ?, ?, ?)", rows)
 
@@ -120,39 +152,69 @@ def _emit_outing(
     start_dt: datetime,
     decline_factor: float,
     rng: random.Random,
-) -> None:
-    place_lat = scenario.home_lat + _m_to_deg_lat(place.lat_offset_m)
-    place_lon = scenario.home_lon + _m_to_deg_lon(place.lon_offset_m, scenario.home_lat)
-    distance_m = max(
-        100.0,
+) -> datetime:
+    # Work in a local metre plane centred on home: x = east, y = north.
+    east_m = place.lon_offset_m
+    north_m = place.lat_offset_m
+    straight_m = math.hypot(east_m, north_m)
+
+    round_trip_m = max(
+        120.0,
         scenario.mean_outing_distance_m * decline_factor * rng.uniform(0.7, 1.3),
     )
-    walking_speed = rng.uniform(0.8, 1.1)
-    if scenario.fatigue_onset_week is not None:
-        walking_speed *= 0.9
+    oneway_m = round_trip_m / 2.0
 
-    n_steps = max(2, int(distance_m / walking_speed / 5))
-    for i in range(n_steps + 1):
-        t = i / n_steps
-        if t <= 0.5:
-            frac = t * 2
-        else:
-            frac = (1 - t) * 2
-        lat = scenario.home_lat + frac * (place_lat - scenario.home_lat)
-        lon = scenario.home_lon + frac * (place_lon - scenario.home_lon)
-        lat += rng.gauss(0, 1e-5)
-        lon += rng.gauss(0, 1e-5)
-        ts = start_dt + timedelta(seconds=i * 5)
+    step_s = TRANSIT_STEP_S
+    if scenario.fatigue_onset_week is not None:
+        step_s = int(TRANSIT_STEP_S / 0.9)
+
+    # Unit perpendicular to the home->place direction (for the route's bow).
+    if straight_m < 1.0:
+        perp_x, perp_y = 1.0, 0.0
+    else:
+        perp_x, perp_y = -north_m / straight_m, east_m / straight_m
+
+    # Bow the route sideways so its arc length matches the target one-way distance
+    # instead of the (much shorter) straight-line gap to the place.
+    half_m = straight_m / 2.0
+    amp_sq = (oneway_m / 2.0) ** 2 - half_m**2
+    amp_m = math.sqrt(amp_sq) if amp_sq > 0 else straight_m * 0.25
+    n_steps = max(4, int(oneway_m / TRANSIT_STEP_M))
+
+    def curve(s: float, sign: float) -> tuple[float, float]:
+        """Quadratic Bezier home(0,0) -> bowed control point -> place, at param s."""
+        cx = east_m * 0.5 + sign * amp_m * perp_x
+        cy = north_m * 0.5 + sign * amp_m * perp_y
+        u = 1.0 - s
+        x = 2 * u * s * cx + s * s * east_m
+        y = 2 * u * s * cy + s * s * north_m
+        return x, y
+
+    def emit(x_m: float, y_m: float, ts: datetime, jitter_m: float) -> None:
+        lat = scenario.home_lat + _m_to_deg_lat(y_m + rng.gauss(0, jitter_m))
+        lon = scenario.home_lon + _m_to_deg_lon(
+            x_m + rng.gauss(0, jitter_m), scenario.home_lat
+        )
         rows.append((scenario.user_id, ts, lat, lon, rng.uniform(3.0, 8.0)))
 
+    t = start_dt
+    out_sign = rng.choice((-1.0, 1.0))
+
+    # Outbound leg: home -> place along a gentle curve.
+    for i in range(n_steps + 1):
+        x_m, y_m = curve(i / n_steps, out_sign)
+        emit(x_m, y_m, t, 1.5)
+        t += timedelta(seconds=step_s)
+
+    # Dwell at the destination: densely sampled, near-stationary, tightly clustered.
     dwell_min = rng.randint(10, 40)
-    for j in range(dwell_min):
-        rows.append(
-            (
-                scenario.user_id,
-                start_dt + timedelta(seconds=n_steps * 5 + j * 60),
-                place_lat + rng.gauss(0, 1e-5),
-                place_lon + rng.gauss(0, 1e-5),
-                rng.uniform(3.0, 8.0),
-            )
-        )
+    for _ in range(dwell_min * 60 // DWELL_SAMPLE_S):
+        emit(east_m, north_m, t, 0.5)
+        t += timedelta(seconds=DWELL_SAMPLE_S)
+
+    # Return leg: place -> home, bowed the other way so it doesn't overlap the way out.
+    for i in range(1, n_steps + 1):
+        x_m, y_m = curve(1.0 - i / n_steps, -out_sign)
+        emit(x_m, y_m, t, 1.5)
+        t += timedelta(seconds=step_s)
+    return t

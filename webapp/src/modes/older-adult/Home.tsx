@@ -1,48 +1,119 @@
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { useOlderAdultHome } from "../../shared/api";
+import { Ic } from "../../shared/Icon";
+import {
+  Card,
+  ChecklistRow,
+  HeroCard,
+  SectionLabel,
+  StatCard,
+} from "../../shared/kit";
+import { kmLabel, durationMin } from "../../shared/labels";
 import { PersonaSwitcher } from "../../shared/PersonaSwitcher";
 import { personaName, usePersona } from "../../shared/persona";
-import { GreetingCard } from "./cards/GreetingCard";
-import { YesterdayWalkCard } from "./cards/YesterdayWalkCard";
-import { StreakCard } from "./cards/StreakCard";
+import { Shell } from "../../shared/Shell";
+import { ErrorState, LoadingState } from "../../shared/states";
+import { HIP } from "../../shared/theme";
 import { FamilyNoteCard } from "./cards/FamilyNoteCard";
 import { TrendCard } from "./cards/TrendCard";
 import { SchematicMap } from "./SchematicMap";
 
+const c = HIP.c;
+
 export default function OlderAdultHome() {
   const userId = usePersona();
+  const navigate = useNavigate();
   const { data, isLoading, isError } = useOlderAdultHome(userId);
 
-  if (isLoading) return <FullScreenMessage text="Lade deinen Tag…" />;
-  if (isError || !data)
-    return <FullScreenMessage text="Etwas ist still geworden. Bitte später erneut versuchen." />;
+  if (isLoading) return <LoadingState />;
+  if (isError || !data) return <ErrorState />;
+
+  const name = personaName(userId);
+  const evening = data.greeting.includes("Abend");
+  const walk = data.yesterday_walk;
+  const km = walk ? kmLabel(walk.distance_m) : null;
+  const hasStreak = data.streak_days > 0;
 
   return (
-    <main className="min-h-screen bg-warm-50 py-6 px-4 max-w-md mx-auto flex flex-col gap-4">
-      <PersonaSwitcher />
-      <GreetingCard
-        greeting={data.greeting}
-        name={personaName(userId)}
-        date={data.date}
+    <Shell active="home">
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -8 }}>
+        <PersonaSwitcher />
+      </div>
+
+      <SectionLabel style={{ textTransform: "uppercase", letterSpacing: "0.12em", fontSize: 12, fontWeight: 700 }}>
+        Meine Mobilität
+      </SectionLabel>
+
+      <HeroCard
+        greeting={`${data.greeting},`}
+        name={name}
+        statusText="In Ordnung"
+        tagline={evening ? "Ein ruhiger Abend — alles sieht gut aus." : "Heute schon alles im Grünen?"}
+        avatar={name}
+        rightSlot={
+          <button
+            aria-label="Einstellungen"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: "50%",
+              border: "none",
+              background: c.navyGlass,
+              color: "#fff",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ic name="settings" size={21} color="#fff" />
+          </button>
+        }
       />
-      <YesterdayWalkCard walk={data.yesterday_walk} />
-      {data.schematic_map && (
-        <Link to={`/older-adult/week?u=${userId}`} aria-label="Wochenansicht öffnen">
-          <SchematicMap map={data.schematic_map} />
-        </Link>
+
+      <Card>
+        <div style={{ fontSize: 18, fontWeight: 600, color: c.textDark, marginBottom: 6 }}>
+          Alles in Ordnung
+        </div>
+        <ChecklistRow icon="walk" tint={c.blue50} iconColor={c.blue600} label="Routine vorhanden" />
+        <ChecklistRow
+          icon="route"
+          tint={c.green50}
+          iconColor={c.green600}
+          label={walk && km ? `${km.value} ${km.unit} gestern unterwegs` : "Heute ein ruhiger Tag"}
+          last={!hasStreak}
+        />
+        {hasStreak && (
+          <ChecklistRow
+            icon="sun"
+            tint={c.amber50}
+            iconColor={c.amber600}
+            label={`${data.streak_days} Tage in Folge draußen`}
+            last
+          />
+        )}
+      </Card>
+
+      {walk && km && (
+        <StatCard
+          title="Bewegung"
+          cells={[
+            { value: km.value, unit: km.unit, label: "gestern unterwegs" },
+            { value: String(durationMin(walk.start_ts, walk.end_ts)), unit: "min", label: "Spaziergang" },
+          ]}
+        />
       )}
-      <StreakCard days={data.streak_days} />
+
+      {data.schematic_map && (
+        <SchematicMap
+          map={data.schematic_map}
+          onClick={() => navigate(`/older-adult/week?u=${userId}`)}
+        />
+      )}
+
       <FamilyNoteCard note={data.family_note} />
       <TrendCard text={data.trend_card} />
-    </main>
-  );
-}
-
-function FullScreenMessage({ text }: { text: string }) {
-  return (
-    <main className="min-h-screen flex items-center justify-center text-lg text-warm-800/80">
-      {text}
-    </main>
+    </Shell>
   );
 }

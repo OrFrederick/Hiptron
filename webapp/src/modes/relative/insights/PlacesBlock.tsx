@@ -1,46 +1,24 @@
-import {
-  Bar,
-  BarChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { PlaceBars } from "../../../shared/charts";
+import { InsightBlock } from "../../../shared/kit";
+import { placeLabel } from "../../../shared/labels";
+import type { InsightBlock as InsightBlockData } from "../../../shared/types";
 
-import { Card } from "../../../shared/Card";
-import type { InsightBlock } from "../../../shared/types";
-
-export function PlacesBlock({ block }: { block: InsightBlock }) {
-  const data = block.series.map((row) => ({
-    date: String(row.date ?? "").slice(5),
-    value: Number(row.count ?? row.value ?? 0),
-  }));
-  const baseline = Number(block.series[0]?.baseline ?? 0);
+export function PlacesBlock({ block }: { block: InsightBlockData }) {
+  const places = block.series
+    .map((row) => ({
+      label: placeLabel(String(row.label ?? "")),
+      count: Number(row.count ?? row.value ?? 0),
+    }))
+    .filter((p) => p.count > 0);
   return (
-    <Card>
-      <p className="text-warm-800/70 text-sm uppercase tracking-wide">
-        {block.question}
-      </p>
-      <p className="text-lg font-medium mt-1">{block.verdict}</p>
-      <div className="h-40 mt-3">
-        <ResponsiveContainer>
-          <BarChart data={data}>
-            <XAxis dataKey="date" />
-            <YAxis hide />
-            <Bar dataKey="value" fill="#7BA688" radius={[4, 4, 0, 0]} />
-            {baseline > 0 && (
-              <ReferenceLine
-                y={baseline}
-                stroke="#3D2F22"
-                strokeDasharray="3 3"
-              />
-            )}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-      <p className="text-xs text-warm-800/60 mt-2">
-        Balken = verschiedene Orte pro Tag. Gestrichelte Linie = Mittelwert.
-      </p>
-    </Card>
+    <InsightBlock question={block.question} verdict={block.verdict}>
+      {places.length > 0 ? (
+        <PlaceBars places={places} />
+      ) : (
+        <div style={{ fontSize: 15.5, color: "#6B7686", lineHeight: 1.5 }}>
+          Noch keine festen Orte erkennbar.
+        </div>
+      )}
+    </InsightBlock>
   );
 }

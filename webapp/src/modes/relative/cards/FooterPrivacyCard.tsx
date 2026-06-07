@@ -1,7 +1,8 @@
 export function FooterPrivacyCard({ name }: { name: string }) {
   return (
-    <p className="text-center text-xs text-warm-800/60 mt-4 mb-2 px-4">
-      {name} bestimmt, was du siehst. Du siehst Trends, niemals den genauen Aufenthaltsort.
+    <p className="text-center text-[13px] text-ink-muted mt-1 mb-1 px-4 leading-relaxed">
+      {name} teilt diese Einblicke mit dir. Du siehst eine ungefähre Route, keine
+      Live-Ortung.
     </p>
   );
 }

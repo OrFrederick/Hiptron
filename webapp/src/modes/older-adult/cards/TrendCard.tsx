@@ -1,4 +1,4 @@
-import { Card } from "../../../shared/Card";
+import { Card } from "../../../shared/kit";
 
 interface Props {
   text: string | null;
@@ -8,10 +8,10 @@ export function TrendCard({ text }: Props) {
   if (!text) return null;
   return (
     <Card>
-      <p className="text-warm-800/70 text-sm uppercase tracking-wide">
+      <p className="text-ink-muted text-sm uppercase tracking-wide">
         Ein liebes Wort
       </p>
-      <p className="text-lg mt-2">{text}</p>
+      <p className="text-[17px] text-ink mt-2">{text}</p>
     </Card>
   );
 }

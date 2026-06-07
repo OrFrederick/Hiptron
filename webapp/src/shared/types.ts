@@ -3,6 +3,7 @@ export interface Place {
   label: string;
   centroid_lat: number;
   centroid_lon: number;
+  visits?: number;
 }
 
 export interface WalkSummary {
@@ -28,6 +29,7 @@ export interface OlderAdultHome {
   streak_days: number;
   family_note: string | null;
   trend_card: string | null;
+  week_distances: WeeklyTrend | null;
 }
 
 export interface WeeklyTrendPoint {
@@ -50,6 +52,9 @@ export interface RelativeHome {
   summary: string;
   weekly_trend: WeeklyTrend;
   worth_noticing: WorthNoticing | null;
+  schematic_map: SchematicMap | null;
+  recent_outings: WalkSummary[];
+  home_label: string;
 }
 
 export type ChartKind = "line" | "bar" | "places" | "list";

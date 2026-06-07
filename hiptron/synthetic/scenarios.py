@@ -123,7 +123,7 @@ MARGARETE_SCENARIO = Scenario(
 # zero change-points, keeping ingrid the demo's reliable "all-clear" persona.
 INGRID_SCENARIO = Scenario(
     user_id="ingrid",
-    seed=63,
+    seed=8,
     weeks=12,
     home_lat=53.5511,
     home_lon=9.9937,

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { Card } from "../../shared/Card";
+import { Card } from "../../shared/kit";
 import type {
   Place,
   SchematicMap as SchematicMapType,
@@ -8,6 +8,7 @@ import type {
 
 interface Props {
   map: SchematicMapType;
+  onClick?: () => void;
 }
 
 export const VIEW_SIZE = 320;
@@ -22,11 +23,11 @@ const LABEL_DE: Record<string, string> = {
 };
 
 const LABEL_COLOR: Record<string, string> = {
-  bakery: "#D89B4A",
-  park: "#7BA688",
-  doctor: "#C66B5C",
-  friend: "#B98AC9",
-  shop: "#E0B870",
+  bakery: "#F2B705",
+  park: "#34A853",
+  doctor: "#1F5FE0",
+  friend: "#8B5CF6",
+  shop: "#0EA5A0",
 };
 
 function labelDe(s: string): string {
@@ -35,35 +36,34 @@ function labelDe(s: string): string {
   return s;
 }
 
-function dedupePlaces(places: Place[]): Place[] {
-  const groups = new Map<string, Place[]>();
-  for (const p of places) {
-    const arr = groups.get(p.label) ?? [];
-    arr.push(p);
-    groups.set(p.label, arr);
-  }
-  const merged: Place[] = [];
-  for (const [, arr] of groups) {
-    const first = arr[0];
-    if (!first) continue;
-    const lat = arr.reduce((s, p) => s + p.centroid_lat, 0) / arr.length;
-    const lon = arr.reduce((s, p) => s + p.centroid_lon, 0) / arr.length;
-    merged.push({
-      place_id: first.place_id,
-      label: first.label,
-      centroid_lat: lat,
-      centroid_lon: lon,
-    });
-  }
-  return merged;
+const MERGE_M = 40;
+
+function approxMeters(a: Place, b: Place): number {
+  const mPerDegLat = 111_320;
+  const dLat = (a.centroid_lat - b.centroid_lat) * mPerDegLat;
+  const dLon =
+    (a.centroid_lon - b.centroid_lon) *
+    mPerDegLat *
+    Math.cos((a.centroid_lat * Math.PI) / 180);
+  return Math.hypot(dLat, dLon);
 }
 
-export function SchematicMap({ map }: Props) {
+// Merge only places that sit on the same spot; keep genuinely distinct clusters
+// as separate dots at their true centroids (never average distinct locations).
+function dedupePlaces(places: Place[]): Place[] {
+  const kept: Place[] = [];
+  for (const p of places) {
+    if (!kept.some((k) => approxMeters(k, p) < MERGE_M)) kept.push(p);
+  }
+  return kept;
+}
+
+export function SchematicMap({ map, onClick }: Props) {
   const { homePx, places, polyline } = useMemo(() => projectPoints(map), [map]);
 
   return (
-    <Card ariaLabel="Schematische Wochenkarte">
-      <p className="text-warm-800/70 text-sm uppercase tracking-wide mb-2">
+    <Card ariaLabel="Schematische Wochenkarte" onClick={onClick}>
+      <p className="text-ink-muted text-sm uppercase tracking-wide mb-2">
         Deine Karte
       </p>
       <svg
@@ -81,7 +81,7 @@ export function SchematicMap({ map }: Props) {
             <path
               d="M 40 0 L 0 0 0 40"
               fill="none"
-              stroke="#E8DFD2"
+              stroke="#E1E7F0"
               strokeWidth="1"
             />
           </pattern>
@@ -91,7 +91,7 @@ export function SchematicMap({ map }: Props) {
           y="0"
           width={VIEW_SIZE}
           height={VIEW_SIZE}
-          fill="#FBF7F2"
+          fill="#EEF2F8"
           rx="16"
         />
         <rect
@@ -106,14 +106,14 @@ export function SchematicMap({ map }: Props) {
           aria-label="Spazierweg"
           points={polyline.map(([x, y]) => `${x},${y}`).join(" ")}
           fill="none"
-          stroke="#4F7E5E"
+          stroke="#1F5FE0"
           strokeWidth="3"
           strokeLinejoin="round"
           strokeLinecap="round"
           opacity="0.85"
         />
         {places.map(({ place, x, y }, i) => {
-          const color = LABEL_COLOR[place.label] ?? "#D89B4A";
+          const color = LABEL_COLOR[place.label] ?? "#1F5FE0";
           const offsetY = i % 2 === 0 ? -14 : 22;
           return (
             <g key={place.place_id}>
@@ -122,7 +122,7 @@ export function SchematicMap({ map }: Props) {
                 cy={y}
                 r="9"
                 fill={color}
-                stroke="#FBF7F2"
+                stroke="#fff"
                 strokeWidth="2"
               />
               <text
@@ -131,7 +131,7 @@ export function SchematicMap({ map }: Props) {
                 textAnchor="middle"
                 fontSize="12"
                 fontWeight="500"
-                fill="#3D2F22"
+                fill="#1A2230"
               >
                 {labelDe(place.label)}
               </text>
@@ -144,8 +144,8 @@ export function SchematicMap({ map }: Props) {
             cx={homePx[0]}
             cy={homePx[1]}
             r="11"
-            fill="#3D6E4E"
-            stroke="#FBF7F2"
+            fill="#0E2A47"
+            stroke="#fff"
             strokeWidth="3"
           />
           <text
@@ -154,7 +154,7 @@ export function SchematicMap({ map }: Props) {
             textAnchor="middle"
             fontSize="12"
             fontWeight="600"
-            fill="#3D2F22"
+            fill="#1A2230"
           >
             Zuhause
           </text>
