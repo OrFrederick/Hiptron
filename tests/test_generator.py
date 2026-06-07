@@ -37,6 +37,16 @@ def test_places_override_subset():
     assert _places_for_week(s, 0, None) == subset
 
 
+def test_place_shrink_start_week_is_late_and_sharp():
+    s = _scn(place_repertoire_shrink=True, place_shrink_start_week=10)
+    # Full repertoire before the start week...
+    assert _places_for_week(s, 0, None) == DEFAULT_PLACES
+    assert _places_for_week(s, 9, None) == DEFAULT_PLACES
+    # ...then a sharp collapse that bottoms out near the end.
+    assert len(_places_for_week(s, 10, None)) < len(DEFAULT_PLACES)
+    assert len(_places_for_week(s, 12, None)) == 1
+
+
 def test_personas_have_distinct_user_ids():
     assert set(SCENARIOS) == {"helga", "otto", "margarete", "ingrid"}
     uids = {name: scn.user_id for name, scn in SCENARIOS.items()}

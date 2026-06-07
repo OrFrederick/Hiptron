@@ -90,7 +90,15 @@ def _places_for_week(
     base = scenario.places if scenario.places is not None else DEFAULT_PLACES
     if not scenario.place_repertoire_shrink:
         return base
-    keep = max(2, len(base) - week_idx // 2)
+    start = scenario.place_shrink_start_week
+    if start is None:
+        # Legacy front-loaded shrink: ~1 place dropped every 2 weeks from the start.
+        keep = max(2, len(base) - week_idx // 2)
+    elif week_idx < start:
+        keep = len(base)
+    else:
+        # Sharp, recent collapse: drop ~2 places per week after the start week.
+        keep = max(1, len(base) - 2 * (week_idx - start + 1))
     return base[:keep]
 
 
