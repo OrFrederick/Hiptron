@@ -21,3 +21,6 @@ data/*.duckdb.wal
 .idea/
 *.swp
 .DS_Store
+
+# Superpowers scratch
+.superpowers/
