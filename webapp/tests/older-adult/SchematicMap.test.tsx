@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { SchematicMap } from "../../src/modes/older-adult/SchematicMap";
 
 describe("SchematicMap", () => {
-  it("renders home dot, place dots, and walk polyline", () => {
+  it("renders the 'Deine Karte' card with the real map container", () => {
     render(
       <SchematicMap
         map={{
@@ -32,10 +32,11 @@ describe("SchematicMap", () => {
         }}
       />,
     );
-    // aria-labels and place text are German per LABEL_DE map in SchematicMap.tsx
-    expect(screen.getByLabelText("Zuhause")).toBeInTheDocument();
-    expect(screen.getByText("Bäckerei")).toBeInTheDocument();
-    expect(screen.getByText("Park")).toBeInTheDocument();
-    expect(screen.getByLabelText("Spazierweg")).toBeInTheDocument();
+    // The live map (OpenStreetMap tiles) renders into an aria-labelled container.
+    // Markers/tiles themselves are drawn by Leaflet at runtime (not in jsdom).
+    expect(screen.getByText("Deine Karte")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Karte mit Zuhause, Orten und der letzten Route"),
+    ).toBeInTheDocument();
   });
 });

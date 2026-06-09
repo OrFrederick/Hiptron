@@ -36,7 +36,7 @@ export default function OlderAdultWeekView() {
   const baselineKm = kmLabel(week?.baseline_mean ?? 0);
 
   return (
-    <Shell active="statistik">
+    <Shell active="stats" mode="older">
       <BackButtonBig onBack={() => navigate(`/older-adult?u=${userId}`)} />
 
       <NavyLabel style={{ marginTop: 2, marginBottom: -2 }}>Meine Woche</NavyLabel>
@@ -64,9 +64,9 @@ export default function OlderAdultWeekView() {
           <NavyLabel style={{ marginTop: 4 }}>Wo du warst</NavyLabel>
           <Card style={{ padding: 22 }}>
             <div style={{ fontSize: 18, color: c.textMuted, lineHeight: 1.5, marginBottom: 20 }}>
-              Deine Orte in dieser Woche — wie oft du dort warst.
+              Deine liebsten Orte — wie oft du dort vorbeischaust.
             </div>
-            <PlaceBars big places={places} />
+            <PlaceBars big frequency places={places} />
           </Card>
         </>
       )}

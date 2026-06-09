@@ -1,6 +1,5 @@
-import { useMemo } from "react";
-
 import { Card } from "../../shared/kit";
+import { LeafletMap } from "../../shared/LeafletMap";
 import type {
   Place,
   SchematicMap as SchematicMapType,
@@ -11,30 +10,10 @@ interface Props {
   onClick?: () => void;
 }
 
+// Kept for the projection unit test (tests/schematicMap.test.ts) and any
+// future schematic fallback; the live map now renders via LeafletMap.
 export const VIEW_SIZE = 320;
 export const PADDING = 32;
-
-const LABEL_DE: Record<string, string> = {
-  bakery: "Bäckerei",
-  park: "Park",
-  doctor: "Arzt",
-  friend: "Freundin",
-  shop: "Laden",
-};
-
-const LABEL_COLOR: Record<string, string> = {
-  bakery: "#F2B705",
-  park: "#34A853",
-  doctor: "#1F5FE0",
-  friend: "#8B5CF6",
-  shop: "#0EA5A0",
-};
-
-function labelDe(s: string): string {
-  if (LABEL_DE[s]) return LABEL_DE[s];
-  if (s.startsWith("place_")) return "Ort";
-  return s;
-}
 
 const MERGE_M = 40;
 
@@ -59,107 +38,25 @@ function dedupePlaces(places: Place[]): Place[] {
 }
 
 export function SchematicMap({ map, onClick }: Props) {
-  const { homePx, places, polyline } = useMemo(() => projectPoints(map), [map]);
-
   return (
-    <Card ariaLabel="Schematische Wochenkarte" onClick={onClick}>
-      <p className="text-ink-muted text-sm uppercase tracking-wide mb-2">
+    <Card ariaLabel="Wochenkarte" onClick={onClick} style={{ padding: 12 }}>
+      <p
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "#525C6B",
+          margin: "2px 4px 10px",
+        }}
+      >
         Deine Karte
       </p>
-      <svg
-        viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`}
-        className="w-full h-auto"
-        role="img"
-      >
-        <defs>
-          <pattern
-            id="grid"
-            width="40"
-            height="40"
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d="M 40 0 L 0 0 0 40"
-              fill="none"
-              stroke="#E1E7F0"
-              strokeWidth="1"
-            />
-          </pattern>
-        </defs>
-        <rect
-          x="0"
-          y="0"
-          width={VIEW_SIZE}
-          height={VIEW_SIZE}
-          fill="#EEF2F8"
-          rx="16"
-        />
-        <rect
-          x={PADDING / 2}
-          y={PADDING / 2}
-          width={VIEW_SIZE - PADDING}
-          height={VIEW_SIZE - PADDING}
-          fill="url(#grid)"
-          rx="12"
-        />
-        <polyline
-          aria-label="Spazierweg"
-          points={polyline.map(([x, y]) => `${x},${y}`).join(" ")}
-          fill="none"
-          stroke="#1F5FE0"
-          strokeWidth="3"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          opacity="0.85"
-        />
-        {places.map(({ place, x, y }, i) => {
-          const color = LABEL_COLOR[place.label] ?? "#1F5FE0";
-          const offsetY = i % 2 === 0 ? -14 : 22;
-          return (
-            <g key={place.place_id}>
-              <circle
-                cx={x}
-                cy={y}
-                r="9"
-                fill={color}
-                stroke="#fff"
-                strokeWidth="2"
-              />
-              <text
-                x={x}
-                y={y + offsetY}
-                textAnchor="middle"
-                fontSize="12"
-                fontWeight="500"
-                fill="#1A2230"
-              >
-                {labelDe(place.label)}
-              </text>
-            </g>
-          );
-        })}
-        <g>
-          <circle
-            aria-label="Zuhause"
-            cx={homePx[0]}
-            cy={homePx[1]}
-            r="11"
-            fill="#0E2A47"
-            stroke="#fff"
-            strokeWidth="3"
-          />
-          <text
-            x={homePx[0]}
-            y={homePx[1] + 26}
-            textAnchor="middle"
-            fontSize="12"
-            fontWeight="600"
-            fill="#1A2230"
-          >
-            Zuhause
-          </text>
-        </g>
-      </svg>
+      <LeafletMap map={map} height={220} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 6px 2px" }}>
+        <span style={{ fontSize: 13.5, color: "#525C6B" }}>Tippen für deine Woche</span>
+        <span style={{ fontSize: 13.5, color: "#525C6B" }}>›</span>
+      </div>
     </Card>
   );
 }
