@@ -5,7 +5,9 @@ import OlderAdultHome from "./modes/older-adult/Home";
 import OlderAdultWeekView from "./modes/older-adult/WeekView";
 import RelativeHome from "./modes/relative/Home";
 import InsightsDetail from "./modes/relative/InsightsDetail";
+import Patterns from "./modes/relative/Patterns";
 import { Ic } from "./shared/Icon";
+import ProfileScreen from "./shared/ProfileScreen";
 import { PersonaSwitcher } from "./shared/PersonaSwitcher";
 import { usePersona } from "./shared/persona";
 import { HIP } from "./shared/theme";
@@ -20,6 +22,8 @@ export default function App() {
       <Route path="/older-adult/week" element={<OlderAdultWeekView />} />
       <Route path="/relative" element={<RelativeHome />} />
       <Route path="/relative/insights" element={<InsightsDetail />} />
+      <Route path="/relative/patterns" element={<Patterns />} />
+      <Route path="/profil" element={<ProfileScreen />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

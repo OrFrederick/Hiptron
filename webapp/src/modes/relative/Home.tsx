@@ -52,13 +52,14 @@ export default function RelativeHome() {
   const callout = lastPlace ? `Zuletzt · ${lastPlace}` : data.home_label;
 
   return (
-    <Shell active="home">
+    <Shell active="home" mode="relative">
       <RelativeHeader
         personaSlot={<PersonaSwitcher variant="navy" />}
         greeting={greetingDe()}
         statusText={calm ? "Diese Woche etwas auffällig" : "Alles sieht gut aus"}
         tone={calm ? "amber" : "green"}
         subtext={data.summary}
+        onProfile={() => navigate(`/profil?u=${userId}&m=relative`)}
       />
 
       <SummaryRow data={data} lastPlace={lastPlace} />
@@ -68,7 +69,7 @@ export default function RelativeHome() {
           map={data.schematic_map}
           avatar={name}
           callout={callout}
-          onClick={() => navigate("/relative/insights")}
+          onClick={() => navigate(`/relative/insights?u=${userId}`)}
         />
       )}
 
@@ -90,13 +91,13 @@ export default function RelativeHome() {
                   text={places ? `Spaziergang über ${places}` : "Spaziergang"}
                   time={`${km.value} ${km.unit} · ${relativeTimeDe(o.end_ts)}`}
                   last={i === outings.length - 1}
-                  onClick={() => navigate("/relative/insights")}
+                  onClick={() => navigate(`/relative/insights?u=${userId}`)}
                 />
               );
             })}
           </Card>
           <button
-            onClick={() => navigate("/relative/insights")}
+            onClick={() => navigate(`/relative/insights?u=${userId}`)}
             style={{
               alignSelf: "center",
               background: "transparent",

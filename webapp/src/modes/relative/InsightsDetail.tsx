@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom";
 
 import { useRelativeInsights } from "../../shared/api";
-import { SlimNavyHeader } from "../../shared/kit";
+import { Ic } from "../../shared/Icon";
+import { Card, SlimNavyHeader } from "../../shared/kit";
 import { personaName, usePersona } from "../../shared/persona";
 import { Shell } from "../../shared/Shell";
 import { ErrorState, LoadingState } from "../../shared/states";
@@ -26,7 +27,7 @@ export default function InsightsDetail() {
   const name = personaName(userId);
 
   return (
-    <Shell active="statistik">
+    <Shell active="stats" mode="relative">
       <SlimNavyHeader title="Einblicke" onBack={() => navigate(`/relative?u=${userId}`)} />
 
       {data.blocks
@@ -34,6 +35,17 @@ export default function InsightsDetail() {
         .map((b) => (
           <BlockFor key={b.question} block={b} />
         ))}
+
+      <Card
+        onClick={() => navigate(`/relative/patterns?u=${userId}`)}
+        style={{ display: "flex", alignItems: "center", gap: 14, minHeight: 56, cursor: "pointer" }}
+      >
+        <span style={{ width: 40, height: 40, borderRadius: "50%", background: c.blue50, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Ic name="bars" size={20} color={c.blue600} sw={2} />
+        </span>
+        <div style={{ flex: 1, fontSize: 17, fontWeight: 600, color: c.textDark }}>Rückblick &amp; Muster</div>
+        <Ic name="chevron" size={18} color={c.textMuted} sw={2} />
+      </Card>
 
       <div style={{ textAlign: "center", fontSize: 13.5, color: c.textMuted, lineHeight: 1.5, marginTop: 2, marginBottom: 4 }}>
         {name} teilt diese Einblicke mit dir.
