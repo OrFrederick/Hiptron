@@ -35,7 +35,9 @@ def test_rhythm_shares_sum_to_one(demo_db: Path):
     p = patterns_screen(demo_db, "helga")
     if p.rhythm is not None:
         assert abs(sum(b.share for b in p.rhythm.buckets) - 1.0) < 1e-6
-        assert len(p.rhythm.buckets) == 3
+        # zero-share buckets are dropped → 1..3 non-empty buckets
+        assert 1 <= len(p.rhythm.buckets) <= 3
+        assert all(b.share > 0 for b in p.rhythm.buckets)
 
 
 def test_routine_in_bounds_and_steady_persona_stable(demo_db: Path):

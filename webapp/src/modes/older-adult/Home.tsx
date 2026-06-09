@@ -134,7 +134,7 @@ function HighlightCard({ highlight }: { highlight: Highlight }) {
       </span>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: c.textDark, lineHeight: 1.3 }}>{highlight.text}</div>
-        {highlight.detail && <div style={{ fontSize: 15, color: c.textMuted, marginTop: 3 }}>{highlight.detail}</div>}
+        {highlight.detail && <div style={{ fontSize: 16, color: c.textMuted, marginTop: 3 }}>{highlight.detail}</div>}
       </div>
     </Card>
   );

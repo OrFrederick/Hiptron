@@ -70,10 +70,15 @@ export default function Patterns() {
       {data.monthly_deltas.length > 0 && (
         <>
           <SectionLabel>Verglichen mit letztem Monat</SectionLabel>
-          <Card style={{ padding: "4px 20px" }}>
-            {data.monthly_deltas.map((d) => (
-              <DeltaRow key={d.feature} label={d.label} pct={d.pct_delta} direction={d.direction} />
-            ))}
+          <Card>
+            <div style={{ fontSize: 15, color: c.textMuted, marginBottom: 12, lineHeight: 1.4 }}>
+              Zahlen können von Monat zu Monat schwanken — das ist ganz normal.
+            </div>
+            <div style={{ margin: "0 -4px" }}>
+              {data.monthly_deltas.map((d) => (
+                <DeltaRow key={d.feature} label={d.label} pct={d.pct_delta} direction={d.direction} />
+              ))}
+            </div>
           </Card>
         </>
       )}

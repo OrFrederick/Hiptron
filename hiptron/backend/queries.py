@@ -441,7 +441,7 @@ def _de_num(x: float, decimals: int = 1) -> str:
     return f"{x:.{decimals}f}".replace(".", ",")
 
 
-def _highlights(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> list[Highlight]:
+def _highlights(con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date) -> list[Highlight]:
     out: list[Highlight] = []
     lw = con.execute(
         """
@@ -456,17 +456,8 @@ def _highlights(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> list[
         day = _WEEKDAYS_DE[lw[1].weekday()]
         out.append(Highlight(kind="longest_walk", text="Dein längster Spaziergang diese Woche.",
                              detail=f"{_de_num(lw[0] / 1000.0)} km · {day}"))
-    fp = con.execute(
-        """
-        SELECT activity_radius_m FROM daily_features
-        WHERE user_id = ? AND date >= ? - INTERVAL 7 DAY AND activity_radius_m IS NOT NULL
-        ORDER BY activity_radius_m DESC LIMIT 1
-        """,
-        (user_id, ref_date),
-    ).fetchone()
-    if fp and fp[0]:
-        out.append(Highlight(kind="furthest", text="Am weitesten von zu Hause unterwegs.",
-                             detail=f"{_de_num(fp[0] / 1000.0)} km"))
+    # "furthest" (max activity_radius_m) dropped: ~200m flat across all personas in this
+    # data → reads broken/identical and adds no novelty. Highlights = longest walk + new place.
     np = con.execute(
         """
         SELECT label FROM places
@@ -481,15 +472,31 @@ def _highlights(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> list[
     return out
 
 
-def _highlight(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> Highlight | None:
+# OA gets ONE celebratory card. A new place always earns it; a "longest walk" only
+# does when it clears this floor — else celebrating e.g. helga's 0,4 km reads as faint
+# praise for a declining week, so the card is omitted (a missing card beats a hollow one).
+_OA_HIGHLIGHT_MIN_WALK_M = 600.0
+
+
+def _highlight(con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date) -> Highlight | None:
     by_kind = {h.kind: h for h in _highlights(con, user_id, ref_date)}
-    for k in ("new_place", "longest_walk", "furthest"):
-        if k in by_kind:
-            return by_kind[k]
+    if "new_place" in by_kind:
+        return by_kind["new_place"]
+    if "longest_walk" in by_kind:
+        d = con.execute(
+            """
+            SELECT max(wf.distance_m)
+            FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+            WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) >= ? - INTERVAL 7 DAY
+            """,
+            (user_id, ref_date),
+        ).fetchone()
+        if d and d[0] and d[0] >= _OA_HIGHLIGHT_MIN_WALK_M:
+            return by_kind["longest_walk"]
     return None
 
 
-def _rhythm(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> Rhythm | None:
+def _rhythm(con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date) -> Rhythm | None:
     rows = con.execute(
         """
         SELECT EXTRACT(HOUR FROM start_ts) AS h, count(*) AS c
@@ -511,6 +518,9 @@ def _rhythm(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> Rhythm | 
         RhythmBucket(label="Abends", share=e / total),
     ]
     top = max(buckets, key=lambda b: b.share)
+    # Drop empty buckets (e.g. seniors rarely out "Abends") — a dead 0% bar reads as
+    # missing data, not as a real pattern. Remaining shares still sum to 1.
+    buckets = [b for b in buckets if b.share > 0]
     sentence = (
         f"Meist {top.label.lower()} unterwegs."
         if top.share >= 0.45
@@ -522,7 +532,9 @@ def _rhythm(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> Rhythm | 
 _MONTHLY_FEATURES = ("total_distance_m", "activity_radius_m", "n_outings", "place_count")
 
 
-def _monthly_deltas(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> list[MonthlyDelta]:
+def _monthly_deltas(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> list[MonthlyDelta]:
     out: list[MonthlyDelta] = []
     for f in _MONTHLY_FEATURES:
         row = con.execute(
@@ -536,17 +548,32 @@ def _monthly_deltas(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> l
             """,
             (ref_date, ref_date, ref_date, user_id, ref_date),
         ).fetchone()
+        if row is None:
+            continue
         this_v, prior_v = row
         if this_v is None or prior_v is None or prior_v == 0:
             continue
         pct = (this_v - prior_v) / prior_v * 100.0
-        direction = "flat" if abs(pct) < 5 else ("up" if pct > 0 else "down")
-        out.append(MonthlyDelta(feature=f, label=_feature_de(f), this_value=float(this_v),
-                                prior_value=float(prior_v), pct_delta=float(pct), direction=direction))
+        # <10% month-to-month is everyday noise → "etwa gleich", not a directional arrow.
+        direction: Literal["up", "down", "flat"] = (
+            "flat" if abs(pct) < 10 else ("up" if pct > 0 else "down")
+        )
+        out.append(
+            MonthlyDelta(
+                feature=f,
+                label=_feature_de(f),
+                this_value=float(this_v),
+                prior_value=float(prior_v),
+                pct_delta=float(pct),
+                direction=direction,
+            )
+        )
     return out
 
 
-def _routine(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> RoutineScore | None:
+def _routine(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> RoutineScore | None:
     base = con.execute(
         """
         SELECT count(*) AS n, stddev_pop(EXTRACT(HOUR FROM start_ts)) AS sd
@@ -555,6 +582,8 @@ def _routine(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> RoutineS
         """,
         (user_id, ref_date),
     ).fetchone()
+    if base is None:
+        return None
     n = int(base[0] or 0)
     if n < 10:
         return None
@@ -573,12 +602,14 @@ def _routine(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> RoutineS
         """,
         (user_id, ref_date),
     ).fetchone()
+    if reg is None:
+        return None
     regular, total = float(reg[0]), float(reg[1])
     reg_ratio = (regular / total) if total else 0.0
     # divisor 6.0 tuned so ingrid (sd≈2.5h, reg_ratio≈0.99) scores ≥60 → stabil
     time_score = max(0.0, min(1.0, 1.0 - sd / 6.0))
     score = int(round(100 * (0.7 * time_score + 0.3 * reg_ratio)))
-    band = "stabil" if score >= 60 else "wechselnd"
+    band: Literal["stabil", "wechselnd"] = "stabil" if score >= 60 else "wechselnd"
     sentence = (
         "Geht meist zu ähnlichen Zeiten und an vertraute Orte."
         if band == "stabil"
