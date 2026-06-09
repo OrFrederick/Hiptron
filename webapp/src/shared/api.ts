@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import type { InsightsDetail, OlderAdultHome, RelativeHome } from "./types";
+import type { InsightsDetail, OlderAdultHome, PatternsScreen, RelativeHome } from "./types";
 
 const DEFAULT_USER = "helga";
 
@@ -31,5 +31,13 @@ export function useRelativeInsights(userId: string = DEFAULT_USER) {
     queryKey: ["relative-insights", userId],
     queryFn: () =>
       fetchJson<InsightsDetail>(`/api/relative/insights?user_id=${userId}`),
+  });
+}
+
+export function useRelativePatterns(userId: string = DEFAULT_USER) {
+  return useQuery({
+    queryKey: ["relative-patterns", userId],
+    queryFn: () =>
+      fetchJson<PatternsScreen>(`/api/relative/patterns?user_id=${userId}`),
   });
 }

@@ -98,13 +98,23 @@ export function WeekBars({
   );
 }
 
+// Warm, count-free frequency word from a place's share of the most-visited spot.
+// Senior view: a kind "how often" instead of a cold, inflated tally (e.g. "96×").
+function frequencyWord(share: number): string {
+  if (share >= 0.66) return "fast immer";
+  if (share >= 0.33) return "oft";
+  return "ab und zu";
+}
+
 // ── Place list with a frequency bar per row ──
 export function PlaceBars({
   places,
   big = false,
+  frequency = false,
 }: {
   places: { label: string; count: number }[];
   big?: boolean;
+  frequency?: boolean;
 }) {
   const col = c.blue600;
   const max = Math.max(...places.map((p) => p.count), 1);
@@ -131,7 +141,7 @@ export function PlaceBars({
           </div>
           <div
             style={{
-              width: big ? 50 : 42,
+              width: big ? (frequency ? 92 : 50) : frequency ? 78 : 42,
               flexShrink: 0,
               textAlign: "right",
               fontSize: big ? 16 : 14,
@@ -140,10 +150,59 @@ export function PlaceBars({
               fontVariantNumeric: "tabular-nums",
             }}
           >
-            {p.count}×
+            {frequency ? frequencyWord(p.count / max) : `${p.count}×`}
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── 3-bucket time-of-day share bars (outdoor rhythm) ──
+export function RhythmBars({ buckets }: { buckets: { label: string; share: number }[] }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {buckets.map((b, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 100, flexShrink: 0, fontSize: 15, fontWeight: 600, color: c.textDark }}>{b.label}</div>
+          <div style={{ flex: 1, height: 10, background: c.chip, borderRadius: 999, overflow: "hidden" }}>
+            <div style={{ width: `${Math.round(b.share * 100)}%`, height: "100%", background: c.blue600, opacity: 0.85, borderRadius: 999 }} />
+          </div>
+          <div style={{ width: 46, textAlign: "right", fontSize: 14, fontWeight: 600, color: c.textMuted, fontVariantNumeric: "tabular-nums" }}>
+            {Math.round(b.share * 100)}%
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Signed delta row vs prior month (neutral, never alarm) ──
+export function DeltaRow({ label, pct, direction }: { label: string; pct: number; direction: "up" | "down" | "flat" }) {
+  const arrow = direction === "up" ? "▲" : direction === "down" ? "▼" : "→";
+  const tint = direction === "flat" ? c.textMuted : c.blue600;
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 46, borderBottom: `1px solid ${c.line}` }}>
+      <span style={{ fontSize: 16, fontWeight: 600, color: c.textDark }}>{label}</span>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 15, fontWeight: 600, color: tint, fontVariantNumeric: "tabular-nums" }}>
+        <span style={{ fontSize: 11 }}>{arrow}</span>
+        {direction === "flat" ? "etwa gleich" : `${Math.abs(Math.round(pct))}%`}
+      </span>
+    </div>
+  );
+}
+
+// ── Calm routine-consistency bar (reassurance, not a clinical dial) ──
+export function RoutineBar({ score, band }: { score: number; band: "stabil" | "wechselnd" }) {
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontSize: 15, fontWeight: 600, color: c.textDark }}>Rhythmus</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: band === "stabil" ? c.green700 : c.textMuted }}>{band}</span>
+      </div>
+      <div style={{ height: 12, background: c.chip, borderRadius: 999, overflow: "hidden" }}>
+        <div style={{ width: `${Math.max(6, Math.min(100, score))}%`, height: "100%", background: c.green600, opacity: 0.85, borderRadius: 999 }} />
+      </div>
     </div>
   );
 }
