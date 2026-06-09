@@ -8,11 +8,17 @@ from typing import Any, Literal
 import duckdb
 
 from hiptron.backend.models import (
+    Highlight,
     InsightBlock,
     InsightsDetail,
+    MonthlyDelta,
     OlderAdultHome,
+    PatternsScreen,
     Place,
     RelativeHome,
+    Rhythm,
+    RhythmBucket,
+    RoutineScore,
     SchematicMap,
     WalkSummary,
     WeeklyTrend,
@@ -101,6 +107,10 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
 
         streak = _streak_days(con, user_id)
         trend = _latest_older_adult_trend_text(con, user_id)
+        ref_row = con.execute(
+            "SELECT max(date) FROM daily_features WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        ref_date = ref_row[0] if ref_row and ref_row[0] else dt.date.today()
         return OlderAdultHome(
             greeting=_greeting_de(),
             date=today,
@@ -110,6 +120,7 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
             family_note=None,
             trend_card=trend,
             week_distances=_weekly_distance(con, user_id),
+            highlight=_highlight(con, user_id, ref_date),
         )
     finally:
         con.close()
@@ -418,6 +429,182 @@ def _display_name(user_id: str) -> str:
     }.get(user_id, user_id.capitalize())
 
 
+def _pronoun(user_id: str) -> str:
+    # Persona-aware subject pronoun for insight questions ("Geht sie/er raus?").
+    return {"otto": "er"}.get(user_id, "sie")
+
+
+_WEEKDAYS_DE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+
+
+def _de_num(x: float, decimals: int = 1) -> str:
+    return f"{x:.{decimals}f}".replace(".", ",")
+
+
+def _highlights(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> list[Highlight]:
+    out: list[Highlight] = []
+    lw = con.execute(
+        """
+        SELECT wf.distance_m, w.start_ts
+        FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+        WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) >= ? - INTERVAL 7 DAY
+        ORDER BY wf.distance_m DESC LIMIT 1
+        """,
+        (user_id, ref_date),
+    ).fetchone()
+    if lw and lw[0]:
+        day = _WEEKDAYS_DE[lw[1].weekday()]
+        out.append(Highlight(kind="longest_walk", text="Dein längster Spaziergang diese Woche.",
+                             detail=f"{_de_num(lw[0] / 1000.0)} km · {day}"))
+    fp = con.execute(
+        """
+        SELECT activity_radius_m FROM daily_features
+        WHERE user_id = ? AND date >= ? - INTERVAL 7 DAY AND activity_radius_m IS NOT NULL
+        ORDER BY activity_radius_m DESC LIMIT 1
+        """,
+        (user_id, ref_date),
+    ).fetchone()
+    if fp and fp[0]:
+        out.append(Highlight(kind="furthest", text="Am weitesten von zu Hause unterwegs.",
+                             detail=f"{_de_num(fp[0] / 1000.0)} km"))
+    np = con.execute(
+        """
+        SELECT label FROM places
+        WHERE user_id = ? AND label IS NOT NULL
+          AND CAST(first_seen AS DATE) >= ? - INTERVAL 7 DAY
+        ORDER BY first_seen DESC LIMIT 1
+        """,
+        (user_id, ref_date),
+    ).fetchone()
+    if np and np[0]:
+        out.append(Highlight(kind="new_place", text="Neuer Ort entdeckt.", detail=str(np[0])))
+    return out
+
+
+def _highlight(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> Highlight | None:
+    by_kind = {h.kind: h for h in _highlights(con, user_id, ref_date)}
+    for k in ("new_place", "longest_walk", "furthest"):
+        if k in by_kind:
+            return by_kind[k]
+    return None
+
+
+def _rhythm(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> Rhythm | None:
+    rows = con.execute(
+        """
+        SELECT EXTRACT(HOUR FROM start_ts) AS h, count(*) AS c
+        FROM walks
+        WHERE user_id = ? AND CAST(start_ts AS DATE) >= ? - INTERVAL 28 DAY
+        GROUP BY h
+        """,
+        (user_id, ref_date),
+    ).fetchall()
+    total = sum(int(c) for _, c in rows)
+    if total < 8:
+        return None
+    m = sum(int(c) for h, c in rows if h < 12)
+    a = sum(int(c) for h, c in rows if 12 <= h < 18)
+    e = sum(int(c) for h, c in rows if h >= 18)
+    buckets = [
+        RhythmBucket(label="Vormittags", share=m / total),
+        RhythmBucket(label="Nachmittags", share=a / total),
+        RhythmBucket(label="Abends", share=e / total),
+    ]
+    top = max(buckets, key=lambda b: b.share)
+    sentence = (
+        f"Meist {top.label.lower()} unterwegs."
+        if top.share >= 0.45
+        else "Zu unterschiedlichen Tageszeiten unterwegs."
+    )
+    return Rhythm(buckets=buckets, sentence=sentence)
+
+
+_MONTHLY_FEATURES = ("total_distance_m", "activity_radius_m", "n_outings", "place_count")
+
+
+def _monthly_deltas(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> list[MonthlyDelta]:
+    out: list[MonthlyDelta] = []
+    for f in _MONTHLY_FEATURES:
+        row = con.execute(
+            f"""
+            SELECT
+              avg(CASE WHEN date > ? - INTERVAL 28 DAY THEN {f} END) AS this_v,
+              avg(CASE WHEN date <= ? - INTERVAL 28 DAY
+                        AND date > ? - INTERVAL 56 DAY THEN {f} END) AS prior_v
+            FROM daily_features
+            WHERE user_id = ? AND date > ? - INTERVAL 56 DAY
+            """,
+            (ref_date, ref_date, ref_date, user_id, ref_date),
+        ).fetchone()
+        this_v, prior_v = row
+        if this_v is None or prior_v is None or prior_v == 0:
+            continue
+        pct = (this_v - prior_v) / prior_v * 100.0
+        direction = "flat" if abs(pct) < 5 else ("up" if pct > 0 else "down")
+        out.append(MonthlyDelta(feature=f, label=_feature_de(f), this_value=float(this_v),
+                                prior_value=float(prior_v), pct_delta=float(pct), direction=direction))
+    return out
+
+
+def _routine(con: duckdb.DuckDBPyConnection, user_id: str, ref_date) -> RoutineScore | None:
+    base = con.execute(
+        """
+        SELECT count(*) AS n, stddev_pop(EXTRACT(HOUR FROM start_ts)) AS sd
+        FROM walks
+        WHERE user_id = ? AND CAST(start_ts AS DATE) >= ? - INTERVAL 28 DAY
+        """,
+        (user_id, ref_date),
+    ).fetchone()
+    n = int(base[0] or 0)
+    if n < 10:
+        return None
+    sd = float(base[1]) if base[1] is not None else 0.0
+    reg = con.execute(
+        """
+        WITH v AS (
+          SELECT p.place_id, count(*) AS c
+          FROM walk_place_visits wv
+          JOIN places p ON p.place_id = wv.place_id
+          JOIN walks w ON w.walk_id = wv.walk_id
+          WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) >= ? - INTERVAL 28 DAY
+          GROUP BY p.place_id
+        )
+        SELECT coalesce(sum(CASE WHEN c >= 3 THEN c END), 0), coalesce(sum(c), 0) FROM v
+        """,
+        (user_id, ref_date),
+    ).fetchone()
+    regular, total = float(reg[0]), float(reg[1])
+    reg_ratio = (regular / total) if total else 0.0
+    # divisor 6.0 tuned so ingrid (sd≈2.5h, reg_ratio≈0.99) scores ≥60 → stabil
+    time_score = max(0.0, min(1.0, 1.0 - sd / 6.0))
+    score = int(round(100 * (0.7 * time_score + 0.3 * reg_ratio)))
+    band = "stabil" if score >= 60 else "wechselnd"
+    sentence = (
+        "Geht meist zu ähnlichen Zeiten und an vertraute Orte."
+        if band == "stabil"
+        else "Geht zu wechselnden Zeiten und Orten — abwechslungsreich."
+    )
+    return RoutineScore(score=score, band=band, sentence=sentence)
+
+
+def patterns_screen(db_path: Path, user_id: str) -> PatternsScreen:
+    con = _con(db_path)
+    try:
+        ref = con.execute(
+            "SELECT max(date) FROM daily_features WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        ref_date = ref[0] if ref and ref[0] else dt.date.today()
+        return PatternsScreen(
+            user_id=user_id,
+            highlights=_highlights(con, user_id, ref_date),
+            rhythm=_rhythm(con, user_id, ref_date),
+            monthly_deltas=_monthly_deltas(con, user_id, ref_date),
+            routine=_routine(con, user_id, ref_date),
+        )
+    finally:
+        con.close()
+
+
 def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
     con = _con(db_path)
     try:
@@ -429,11 +616,12 @@ def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
 
         blocks: list[InsightBlock] = []
         name = _display_name(user_id)
+        pron = _pronoun(user_id)
         chart_data: list[tuple[str, str, Literal["line", "bar", "places", "list"]]] = [
             ("total_distance_m", f"Wie weit geht {name}?", "bar"),
             ("activity_radius_m", "Bleibt der Aktionsradius gleich?", "line"),
-            ("n_outings", "Geht sie regelmäßig raus?", "bar"),
-            ("place_count", "Wo war sie unterwegs?", "places"),
+            ("n_outings", f"Geht {pron} regelmäßig raus?", "bar"),
+            ("place_count", f"Wo war {pron} unterwegs?", "places"),
         ]
         for feature, question, chart_kind in chart_data:
             series_rows = con.execute(
@@ -498,10 +686,15 @@ def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
             """,
             (user_id,),
         ).fetchall()
+        n_cp = len(cp_rows)
         cp_verdict = (
             "Keine nennenswerten Veränderungen."
             if not cp_rows
-            else f"{len(cp_rows)} Veränderungspunkt(e) zuletzt erkannt."
+            else (
+                "Eine Veränderung zuletzt erkannt."
+                if n_cp == 1
+                else f"{n_cp} Veränderungen zuletzt erkannt."
+            )
         )
         blocks.append(
             InsightBlock(
@@ -535,7 +728,8 @@ def _block_verdict(feature: str, series: list[tuple[Any, Any]], baseline_mean: f
     recent = sum(recent_vals) / len(recent_vals)
     delta = (recent - baseline_mean) / baseline_mean * 100.0
     name = _feature_de(feature)
+    verb = "sind" if feature == "n_outings" else "ist"
     if abs(delta) < 7:
-        return f"{name} ist stabil."
+        return f"{name} {verb} stabil."
     direction = "niedriger" if delta < 0 else "höher"
-    return f"{name} ist {abs(delta):.0f}% {direction} als der Mittelwert."
+    return f"{name} {verb} {abs(delta):.0f}% {direction} als der Mittelwert."

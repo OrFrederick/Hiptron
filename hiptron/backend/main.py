@@ -6,11 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from hiptron.backend.models import (
     InsightsDetail,
     OlderAdultHome,
+    PatternsScreen,
     RelativeHome,
 )
 from hiptron.backend.queries import (
     insights_detail,
     older_adult_home,
+    patterns_screen,
     relative_home,
 )
 
@@ -36,6 +38,10 @@ def create_app(db_path: Path | str) -> FastAPI:
     @app.get("/api/relative/insights", response_model=InsightsDetail)
     def get_relative_insights(user_id: str) -> InsightsDetail:
         return insights_detail(db, user_id)
+
+    @app.get("/api/relative/patterns", response_model=PatternsScreen)
+    def get_relative_patterns(user_id: str) -> PatternsScreen:
+        return patterns_screen(db, user_id)
 
     return app
 
