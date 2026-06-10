@@ -291,6 +291,63 @@ export function TimeOutdoorsStat({ avgMin, direction }: { avgMin: number; direct
   );
 }
 
+// ── Weekly walking-speed line (tempo observation, never a verdict) ──
+function kmhLabel(v: number): string {
+  const s = Number.isInteger(v) ? String(v) : v.toFixed(1).replace(".", ",");
+  return `${s} km/h`;
+}
+
+export function SpeedTrendLine({ points }: { points: { week_start: string; kmh: number }[] }) {
+  if (points.length < 2) return null;
+  const W = 300, H = 132, padL = 56, padR = 8, padT = 10, padB = 24;
+  const maxV = niceAxisMax(Math.max(...points.map((p) => p.kmh), 0.001) * 1.1);
+  const x = (i: number) => padL + (i / (points.length - 1)) * (W - padL - padR);
+  const y = (v: number) => padT + (1 - v / maxV) * (H - padT - padB);
+  const poly = points.map((p, i) => `${x(i)},${y(p.kmh)}`).join(" ");
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso);
+    return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.`;
+  };
+  const ticks = [0, maxV / 2, maxV];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+      {ticks.map((v, i) => (
+        <g key={i}>
+          <line x1={padL} x2={W - padR} y1={y(v)} y2={y(v)} stroke={c.line} strokeWidth={1} />
+          <text x={padL - 6} y={y(v) + 3.5} textAnchor="end" fontSize={10.5} fill={c.textMuted}>
+            {kmhLabel(v)}
+          </text>
+        </g>
+      ))}
+      <polyline points={poly} fill="none" stroke={c.blue600} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+      <text x={padL} y={H - 6} fontSize={10.5} fill={c.textMuted}>
+        {fmtDate(points[0]!.week_start)}
+      </text>
+      <text x={W - padR} y={H - 6} textAnchor="end" fontSize={10.5} fill={c.textMuted}>
+        {fmtDate(points[points.length - 1]!.week_start)}
+      </text>
+    </svg>
+  );
+}
+
+// ── Mid-walk pause hero stat (everyday observation, mirrors TimeOutdoorsStat) ──
+export function PauseStat({ avg, direction }: { avg: number; direction: "up" | "down" | "flat" }) {
+  const arrow = direction === "up" ? "▲" : direction === "down" ? "▼" : "→";
+  const tint = direction === "flat" ? c.textMuted : c.blue600;
+  const n = Number.isInteger(avg) ? String(avg) : avg.toFixed(1).replace(".", ",");
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+      <span style={{ fontSize: 30, fontWeight: 700, color: c.textDark, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>
+        Ø {n} {avg === 1 ? "Pause" : "Pausen"}
+      </span>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, color: tint }}>
+        <span style={{ fontSize: 11 }}>{arrow}</span>
+        {direction === "flat" ? "etwa gleich" : "Vormonat"}
+      </span>
+    </div>
+  );
+}
+
 // ── Calm routine-consistency bar (reassurance, not a clinical dial) ──
 export function RoutineBar({ score, band }: { score: number; band: "stabil" | "wechselnd" }) {
   return (

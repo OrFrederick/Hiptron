@@ -106,6 +106,30 @@ export interface TimeOutdoors {
   direction: "up" | "down" | "flat";
   sentence: string;
 }
+export interface SpeedPoint {
+  week_start: string;
+  kmh: number;
+}
+export interface WalkingSpeed {
+  weekly: SpeedPoint[];
+  this_kmh: number;
+  prior_kmh: number;
+  pct_delta: number;
+  direction: "up" | "down" | "flat";
+  sentence: string;
+}
+export interface PauseStats {
+  avg_pauses_per_walk: number;
+  prior_avg: number;
+  direction: "up" | "down" | "flat";
+  sentence: string;
+}
+export interface WalkFade {
+  this_delta_pct: number;
+  prior_delta_pct: number;
+  direction: "up" | "down" | "flat";
+  sentence: string;
+}
 export interface PatternsScreen {
   user_id: string;
   highlights: Highlight[];
@@ -113,4 +137,7 @@ export interface PatternsScreen {
   monthly_deltas: MonthlyDelta[];
   routine: RoutineScore | null;
   time_outdoors: TimeOutdoors | null;
+  walking_speed: WalkingSpeed | null;
+  pauses: PauseStats | null;
+  walk_fade: WalkFade | null;
 }
