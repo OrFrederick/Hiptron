@@ -22,9 +22,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: webapp/package-lock.json
-      - run: npm ci
+      # No lockfile in this repo (npm arborist chokes generating one against
+      # the leaflet dep tree), so plain install instead of npm ci.
+      - run: npm install
         working-directory: webapp
       # Static demo build: pre-baked API snapshots (webapp/public/api, see
       # scripts/bake_static_api.py) + relative base so it serves from any path.
