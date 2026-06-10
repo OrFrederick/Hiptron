@@ -27,7 +27,11 @@ CREATE TABLE IF NOT EXISTS walk_features (
     pause_count             INTEGER,
     dwell_s                 DOUBLE,
     speed_third_delta_pct   DOUBLE,
-    route_hash              VARCHAR
+    route_hash              VARCHAR,
+    -- transit-only sums (segments moving >= 0.3 m/s): the honest inputs for
+    -- gait speed; distance_m/duration_s include destination-dwell time + jitter.
+    transit_m               DOUBLE,
+    transit_s               DOUBLE
 );
 
 -- place clusters
