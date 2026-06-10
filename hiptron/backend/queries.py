@@ -8,11 +8,17 @@ from typing import Any, Literal
 import duckdb
 
 from hiptron.backend.models import (
+    Highlight,
     InsightBlock,
     InsightsDetail,
+    MonthlyDelta,
     OlderAdultHome,
+    PatternsScreen,
     Place,
     RelativeHome,
+    Rhythm,
+    RhythmBucket,
+    RoutineScore,
     SchematicMap,
     WalkSummary,
     WeeklyTrend,
@@ -77,14 +83,7 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
                 distance_m=distance,
                 place_labels=place_labels,
             )
-            polyline = con.execute(
-                """
-                SELECT lat, lon FROM gps_fixes
-                WHERE user_id = ? AND ts BETWEEN ? AND ?
-                ORDER BY ts
-                """,
-                (user_id, start_ts, end_ts),
-            ).fetchall()
+            polyline = _walk_polyline(con, user_id, start_ts, end_ts)
             home = con.execute(
                 "SELECT median(lat), median(lon) FROM gps_fixes WHERE user_id = ?",
                 (user_id,),
@@ -101,6 +100,12 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
 
         streak = _streak_days(con, user_id)
         trend = _latest_older_adult_trend_text(con, user_id)
+        ref_row = con.execute(
+            "SELECT max(date) FROM daily_features WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        ref_date = ref_row[0] if ref_row and ref_row[0] else dt.date.today()
+        cp = _recent_relative_changepoint(con, user_id, ref_date)
+        oa_status: Literal["green", "amber"] = "amber" if cp else "green"
         return OlderAdultHome(
             greeting=_greeting_de(),
             date=today,
@@ -110,6 +115,8 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
             family_note=None,
             trend_card=trend,
             week_distances=_weekly_distance(con, user_id),
+            highlight=_highlight(con, user_id, ref_date),
+            status=oa_status,
         )
     finally:
         con.close()
@@ -152,6 +159,28 @@ def _weekly_distance(
 
 _SCHEMATIC_MAX_PLACES = 5
 _SCHEMATIC_HOME_RADIUS_M = 60.0
+
+# The walk segmenter only counts fixes outside its 50 m home radius, so a walk's
+# start_ts/end_ts exclude the doorstep leg. Pad the fix query so the drawn route
+# reaches the home pin instead of floating ~50-70 m away. Outings are spaced
+# >= 15 min apart, so 2 min never bleeds into a neighbouring walk.
+_POLYLINE_PAD = dt.timedelta(minutes=2)
+
+
+def _walk_polyline(
+    con: duckdb.DuckDBPyConnection,
+    user_id: str,
+    start_ts: dt.datetime,
+    end_ts: dt.datetime,
+) -> list[tuple[float, float]]:
+    return con.execute(
+        """
+        SELECT lat, lon FROM gps_fixes
+        WHERE user_id = ? AND ts BETWEEN ? AND ?
+        ORDER BY ts
+        """,
+        (user_id, start_ts - _POLYLINE_PAD, end_ts + _POLYLINE_PAD),
+    ).fetchall()
 
 
 def _top_places(
@@ -232,14 +261,7 @@ def _schematic_from_latest_walk(
     if row is None:
         return None
     _walk_id, start_ts, end_ts = row
-    polyline = con.execute(
-        """
-        SELECT lat, lon FROM gps_fixes
-        WHERE user_id = ? AND ts BETWEEN ? AND ?
-        ORDER BY ts
-        """,
-        (user_id, start_ts, end_ts),
-    ).fetchall()
+    polyline = _walk_polyline(con, user_id, start_ts, end_ts)
     home_lat, home_lon = _home_latlon(con, user_id)
     places = _top_places(con, user_id, home_lat, home_lon)
     return SchematicMap(
@@ -318,6 +340,23 @@ def _streak_days(con: duckdb.DuckDBPyConnection, user_id: str) -> int:
 ALL_CLEAR_OLDER = "Schöne, gleichmäßige Woche. Weiter so."
 
 
+def _recent_relative_changepoint(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> dict | None:
+    """Return the parsed payload of the most recent relative-audience insight
+    within 14 days of *ref_date*, or None if there is none."""
+    row = con.execute(
+        """
+        SELECT payload_json FROM insights
+        WHERE user_id = ? AND audience = 'relative'
+          AND created_ts >= ? - INTERVAL 14 DAY
+        ORDER BY created_ts DESC LIMIT 1
+        """,
+        (user_id, dt.datetime.combine(ref_date, dt.time(0, 0))),
+    ).fetchone()
+    return json.loads(row[0]) if row else None
+
+
 def _latest_older_adult_trend_text(con: duckdb.DuckDBPyConnection, user_id: str) -> str:
     row = con.execute(
         """
@@ -343,19 +382,10 @@ def relative_home(db_path: Path, user_id: str) -> RelativeHome:
 
         weekly = _weekly_distance(con, user_id)
 
-        latest_cp = con.execute(
-            """
-            SELECT payload_json FROM insights
-            WHERE user_id = ? AND audience = 'relative'
-              AND created_ts >= ? - INTERVAL 14 DAY
-            ORDER BY created_ts DESC LIMIT 1
-            """,
-            (user_id, dt.datetime.combine(ref_date, dt.time(0, 0))),
-        ).fetchone()
+        payload = _recent_relative_changepoint(con, user_id, ref_date)
         worth = None
         status: Literal["green", "amber"] = "green"
-        if latest_cp:
-            payload = json.loads(latest_cp[0])
+        if payload:
             status = "amber"
             worth = WorthNoticing(
                 headline=payload["text"],
@@ -418,6 +448,213 @@ def _display_name(user_id: str) -> str:
     }.get(user_id, user_id.capitalize())
 
 
+def _pronoun(user_id: str) -> str:
+    # Persona-aware subject pronoun for insight questions ("Geht sie/er raus?").
+    return {"otto": "er"}.get(user_id, "sie")
+
+
+_WEEKDAYS_DE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+
+
+def _de_num(x: float, decimals: int = 1) -> str:
+    return f"{x:.{decimals}f}".replace(".", ",")
+
+
+def _highlights(con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date) -> list[Highlight]:
+    out: list[Highlight] = []
+    lw = con.execute(
+        """
+        SELECT wf.distance_m, w.start_ts
+        FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+        WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) >= ? - INTERVAL 7 DAY
+        ORDER BY wf.distance_m DESC LIMIT 1
+        """,
+        (user_id, ref_date),
+    ).fetchone()
+    if lw and lw[0]:
+        day = _WEEKDAYS_DE[lw[1].weekday()]
+        out.append(Highlight(kind="longest_walk", text="Dein längster Spaziergang diese Woche.",
+                             detail=f"{_de_num(lw[0] / 1000.0)} km · {day}"))
+    # "furthest" (max activity_radius_m) dropped: ~200m flat across all personas in this
+    # data → reads broken/identical and adds no novelty. Highlights = longest walk + new place.
+    np = con.execute(
+        """
+        SELECT label FROM places
+        WHERE user_id = ? AND label IS NOT NULL
+          AND CAST(first_seen AS DATE) >= ? - INTERVAL 7 DAY
+        ORDER BY first_seen DESC LIMIT 1
+        """,
+        (user_id, ref_date),
+    ).fetchone()
+    if np and np[0]:
+        out.append(Highlight(kind="new_place", text="Neuer Ort entdeckt.", detail=str(np[0])))
+    return out
+
+
+# OA gets ONE celebratory card. A new place always earns it; a "longest walk" only
+# does when it clears this floor — else celebrating e.g. helga's 0,4 km reads as faint
+# praise for a declining week, so the card is omitted (a missing card beats a hollow one).
+_OA_HIGHLIGHT_MIN_WALK_M = 600.0
+
+
+def _highlight(con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date) -> Highlight | None:
+    by_kind = {h.kind: h for h in _highlights(con, user_id, ref_date)}
+    if "new_place" in by_kind:
+        return by_kind["new_place"]
+    if "longest_walk" in by_kind:
+        d = con.execute(
+            """
+            SELECT max(wf.distance_m)
+            FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+            WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) >= ? - INTERVAL 7 DAY
+            """,
+            (user_id, ref_date),
+        ).fetchone()
+        if d and d[0] and d[0] >= _OA_HIGHLIGHT_MIN_WALK_M:
+            return by_kind["longest_walk"]
+    return None
+
+
+def _rhythm(con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date) -> Rhythm | None:
+    rows = con.execute(
+        """
+        SELECT EXTRACT(HOUR FROM start_ts) AS h, count(*) AS c
+        FROM walks
+        WHERE user_id = ? AND CAST(start_ts AS DATE) >= ? - INTERVAL 28 DAY
+        GROUP BY h
+        """,
+        (user_id, ref_date),
+    ).fetchall()
+    total = sum(int(c) for _, c in rows)
+    if total < 8:
+        return None
+    m = sum(int(c) for h, c in rows if h < 12)
+    a = sum(int(c) for h, c in rows if 12 <= h < 18)
+    e = sum(int(c) for h, c in rows if h >= 18)
+    buckets = [
+        RhythmBucket(label="Vormittags", share=m / total),
+        RhythmBucket(label="Nachmittags", share=a / total),
+        RhythmBucket(label="Abends", share=e / total),
+    ]
+    top = max(buckets, key=lambda b: b.share)
+    # Drop empty buckets (e.g. seniors rarely out "Abends") — a dead 0% bar reads as
+    # missing data, not as a real pattern. Remaining shares still sum to 1.
+    buckets = [b for b in buckets if b.share > 0]
+    sentence = (
+        f"Meist {top.label.lower()} unterwegs."
+        if top.share >= 0.45
+        else "Zu unterschiedlichen Tageszeiten unterwegs."
+    )
+    return Rhythm(buckets=buckets, sentence=sentence)
+
+
+_MONTHLY_FEATURES = ("total_distance_m", "activity_radius_m", "n_outings", "place_count")
+
+
+def _monthly_deltas(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> list[MonthlyDelta]:
+    out: list[MonthlyDelta] = []
+    for f in _MONTHLY_FEATURES:
+        row = con.execute(
+            f"""
+            SELECT
+              avg(CASE WHEN date > ? - INTERVAL 28 DAY THEN {f} END) AS this_v,
+              avg(CASE WHEN date <= ? - INTERVAL 28 DAY
+                        AND date > ? - INTERVAL 56 DAY THEN {f} END) AS prior_v
+            FROM daily_features
+            WHERE user_id = ? AND date > ? - INTERVAL 56 DAY
+            """,
+            (ref_date, ref_date, ref_date, user_id, ref_date),
+        ).fetchone()
+        if row is None:
+            continue
+        this_v, prior_v = row
+        if this_v is None or prior_v is None or prior_v == 0:
+            continue
+        pct = (this_v - prior_v) / prior_v * 100.0
+        # <10% month-to-month is everyday noise → "etwa gleich", not a directional arrow.
+        direction: Literal["up", "down", "flat"] = (
+            "flat" if abs(pct) < 10 else ("up" if pct > 0 else "down")
+        )
+        out.append(
+            MonthlyDelta(
+                feature=f,
+                label=_feature_de(f),
+                this_value=float(this_v),
+                prior_value=float(prior_v),
+                pct_delta=float(pct),
+                direction=direction,
+            )
+        )
+    return out
+
+
+def _routine(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> RoutineScore | None:
+    base = con.execute(
+        """
+        SELECT count(*) AS n, stddev_pop(EXTRACT(HOUR FROM start_ts)) AS sd
+        FROM walks
+        WHERE user_id = ? AND CAST(start_ts AS DATE) >= ? - INTERVAL 28 DAY
+        """,
+        (user_id, ref_date),
+    ).fetchone()
+    if base is None:
+        return None
+    n = int(base[0] or 0)
+    if n < 10:
+        return None
+    sd = float(base[1]) if base[1] is not None else 0.0
+    reg = con.execute(
+        """
+        WITH v AS (
+          SELECT p.place_id, count(*) AS c
+          FROM walk_place_visits wv
+          JOIN places p ON p.place_id = wv.place_id
+          JOIN walks w ON w.walk_id = wv.walk_id
+          WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) >= ? - INTERVAL 28 DAY
+          GROUP BY p.place_id
+        )
+        SELECT coalesce(sum(CASE WHEN c >= 3 THEN c END), 0), coalesce(sum(c), 0) FROM v
+        """,
+        (user_id, ref_date),
+    ).fetchone()
+    if reg is None:
+        return None
+    regular, total = float(reg[0]), float(reg[1])
+    reg_ratio = (regular / total) if total else 0.0
+    # divisor 6.0 tuned so ingrid (sd≈2.5h, reg_ratio≈0.99) scores ≥60 → stabil
+    time_score = max(0.0, min(1.0, 1.0 - sd / 6.0))
+    score = int(round(100 * (0.7 * time_score + 0.3 * reg_ratio)))
+    band: Literal["stabil", "wechselnd"] = "stabil" if score >= 60 else "wechselnd"
+    sentence = (
+        "Geht meist zu ähnlichen Zeiten und an vertraute Orte."
+        if band == "stabil"
+        else "Geht zu wechselnden Zeiten und Orten. Abwechslungsreich."
+    )
+    return RoutineScore(score=score, band=band, sentence=sentence)
+
+
+def patterns_screen(db_path: Path, user_id: str) -> PatternsScreen:
+    con = _con(db_path)
+    try:
+        ref = con.execute(
+            "SELECT max(date) FROM daily_features WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        ref_date = ref[0] if ref and ref[0] else dt.date.today()
+        return PatternsScreen(
+            user_id=user_id,
+            highlights=_highlights(con, user_id, ref_date),
+            rhythm=_rhythm(con, user_id, ref_date),
+            monthly_deltas=_monthly_deltas(con, user_id, ref_date),
+            routine=_routine(con, user_id, ref_date),
+        )
+    finally:
+        con.close()
+
+
 def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
     con = _con(db_path)
     try:
@@ -429,11 +666,12 @@ def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
 
         blocks: list[InsightBlock] = []
         name = _display_name(user_id)
+        pron = _pronoun(user_id)
         chart_data: list[tuple[str, str, Literal["line", "bar", "places", "list"]]] = [
             ("total_distance_m", f"Wie weit geht {name}?", "bar"),
             ("activity_radius_m", "Bleibt der Aktionsradius gleich?", "line"),
-            ("n_outings", "Geht sie regelmäßig raus?", "bar"),
-            ("place_count", "Wo war sie unterwegs?", "places"),
+            ("n_outings", f"Geht {pron} regelmäßig raus?", "bar"),
+            ("place_count", f"Wo war {pron} unterwegs?", "places"),
         ]
         for feature, question, chart_kind in chart_data:
             series_rows = con.execute(
@@ -498,10 +736,15 @@ def insights_detail(db_path: Path, user_id: str) -> InsightsDetail:
             """,
             (user_id,),
         ).fetchall()
+        n_cp = len(cp_rows)
         cp_verdict = (
             "Keine nennenswerten Veränderungen."
             if not cp_rows
-            else f"{len(cp_rows)} Veränderungspunkt(e) zuletzt erkannt."
+            else (
+                "Eine Veränderung zuletzt erkannt."
+                if n_cp == 1
+                else f"{n_cp} Veränderungen zuletzt erkannt."
+            )
         )
         blocks.append(
             InsightBlock(
@@ -535,7 +778,8 @@ def _block_verdict(feature: str, series: list[tuple[Any, Any]], baseline_mean: f
     recent = sum(recent_vals) / len(recent_vals)
     delta = (recent - baseline_mean) / baseline_mean * 100.0
     name = _feature_de(feature)
+    verb = "sind" if feature == "n_outings" else "ist"
     if abs(delta) < 7:
-        return f"{name} ist stabil."
+        return f"{name} {verb} stabil."
     direction = "niedriger" if delta < 0 else "höher"
-    return f"{name} ist {abs(delta):.0f}% {direction} als der Mittelwert."
+    return f"{name} {verb} {abs(delta):.0f}% {direction} als der Mittelwert."

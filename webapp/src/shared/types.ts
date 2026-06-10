@@ -30,6 +30,8 @@ export interface OlderAdultHome {
   family_note: string | null;
   trend_card: string | null;
   week_distances: WeeklyTrend | null;
+  highlight: Highlight | null;
+  status: "green" | "amber";
 }
 
 export interface WeeklyTrendPoint {
@@ -69,4 +71,38 @@ export interface InsightBlock {
 export interface InsightsDetail {
   user_id: string;
   blocks: InsightBlock[];
+}
+
+export interface Highlight {
+  kind: "longest_walk" | "furthest" | "new_place";
+  text: string;
+  detail: string | null;
+}
+export interface RhythmBucket {
+  label: string;
+  share: number;
+}
+export interface Rhythm {
+  buckets: RhythmBucket[];
+  sentence: string;
+}
+export interface MonthlyDelta {
+  feature: string;
+  label: string;
+  this_value: number;
+  prior_value: number;
+  pct_delta: number;
+  direction: "up" | "down" | "flat";
+}
+export interface RoutineScore {
+  score: number;
+  band: "stabil" | "wechselnd";
+  sentence: string;
+}
+export interface PatternsScreen {
+  user_id: string;
+  highlights: Highlight[];
+  rhythm: Rhythm | null;
+  monthly_deltas: MonthlyDelta[];
+  routine: RoutineScore | null;
 }

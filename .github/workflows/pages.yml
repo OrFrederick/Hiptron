@@ -1,0 +1,47 @@
+name: Deploy demo to GitHub Pages
+
+on:
+  push:
+    branches: [main, feat/new-metrics]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No lockfile in this repo (npm arborist chokes generating one against
+      # the leaflet dep tree), so plain install instead of npm ci.
+      - run: npm install
+        working-directory: webapp
+      # Static demo build: pre-baked API snapshots (webapp/public/api, see
+      # scripts/bake_static_api.py) + relative base so it serves from any path.
+      - run: npx vite build --base=./
+        working-directory: webapp
+        env:
+          VITE_STATIC_API: "1"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: webapp/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

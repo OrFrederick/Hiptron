@@ -23,7 +23,7 @@ export function YesterdayWalkCard({ walk }: Props) {
   if (!walk) {
     return (
       <Card>
-        <p className="text-lg">Heute noch nicht draußen — das ist in Ordnung.</p>
+        <p className="text-lg">Heute noch nicht draußen. Das ist in Ordnung.</p>
       </Card>
     );
   }

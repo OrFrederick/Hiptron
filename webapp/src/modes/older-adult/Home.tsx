@@ -15,6 +15,7 @@ import { personaName, usePersona } from "../../shared/persona";
 import { Shell } from "../../shared/Shell";
 import { ErrorState, LoadingState } from "../../shared/states";
 import { HIP } from "../../shared/theme";
+import type { Highlight } from "../../shared/types";
 import { FamilyNoteCard } from "./cards/FamilyNoteCard";
 import { TrendCard } from "./cards/TrendCard";
 import { SchematicMap } from "./SchematicMap";
@@ -35,25 +36,29 @@ export default function OlderAdultHome() {
   const km = walk ? kmLabel(walk.distance_m) : null;
   const hasStreak = data.streak_days > 0;
 
+  const goProfile = () => navigate(`/profil?u=${userId}&m=older`);
+
   return (
-    <Shell active="home">
+    <Shell active="home" mode="older">
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -8 }}>
         <PersonaSwitcher />
       </div>
 
       <SectionLabel style={{ textTransform: "uppercase", letterSpacing: "0.12em", fontSize: 12, fontWeight: 700 }}>
-        Meine Mobilität
+        Mein Tag
       </SectionLabel>
 
       <HeroCard
         greeting={`${data.greeting},`}
         name={name}
-        statusText="In Ordnung"
-        tagline={evening ? "Ein ruhiger Abend — alles sieht gut aus." : "Heute schon alles im Grünen?"}
+        statusText={data.status === "amber" ? "Etwas ruhiger zur Zeit" : "In Ordnung"}
+        tagline={evening ? "Ein ruhiger Abend. Alles sieht gut aus." : "Heute schon alles im Grünen?"}
         avatar={name}
+        onProfile={goProfile}
         rightSlot={
           <button
             aria-label="Einstellungen"
+            onClick={goProfile}
             style={{
               width: 44,
               height: 44,
@@ -74,7 +79,7 @@ export default function OlderAdultHome() {
 
       <Card>
         <div style={{ fontSize: 18, fontWeight: 600, color: c.textDark, marginBottom: 6 }}>
-          Alles in Ordnung
+          {data.status === "amber" ? "So war deine Woche" : "Alles in Ordnung"}
         </div>
         <ChecklistRow icon="walk" tint={c.blue50} iconColor={c.blue600} label="Routine vorhanden" />
         <ChecklistRow
@@ -105,6 +110,8 @@ export default function OlderAdultHome() {
         />
       )}
 
+      {data.highlight && <HighlightCard highlight={data.highlight} />}
+
       {data.schematic_map && (
         <SchematicMap
           map={data.schematic_map}
@@ -115,5 +122,20 @@ export default function OlderAdultHome() {
       <FamilyNoteCard note={data.family_note} />
       <TrendCard text={data.trend_card} />
     </Shell>
+  );
+}
+
+function HighlightCard({ highlight }: { highlight: Highlight }) {
+  const icon = highlight.kind === "new_place" ? "pin" : highlight.kind === "furthest" ? "route" : "walk";
+  return (
+    <Card style={{ display: "flex", alignItems: "center", gap: 14, minHeight: 72 }}>
+      <span style={{ width: 46, height: 46, borderRadius: "50%", background: c.green50, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Ic name={icon} size={22} color={c.green600} sw={2} />
+      </span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: c.textDark, lineHeight: 1.3 }}>{highlight.text}</div>
+        {highlight.detail && <div style={{ fontSize: 16, color: c.textMuted, marginTop: 3 }}>{highlight.detail}</div>}
+      </div>
+    </Card>
   );
 }

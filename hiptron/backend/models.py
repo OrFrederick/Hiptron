@@ -49,6 +49,8 @@ class OlderAdultHome(BaseModel):
     family_note: str | None
     trend_card: str | None
     week_distances: WeeklyTrend | None = None
+    highlight: Highlight | None = None
+    status: Literal["green", "amber"] = "green"
 
 
 class WorthNoticing(BaseModel):
@@ -80,3 +82,42 @@ class InsightBlock(BaseModel):
 class InsightsDetail(BaseModel):
     user_id: str
     blocks: list[InsightBlock]
+
+
+class Highlight(BaseModel):
+    kind: Literal["longest_walk", "furthest", "new_place"]
+    text: str
+    detail: str | None = None
+
+
+class RhythmBucket(BaseModel):
+    label: str
+    share: float
+
+
+class Rhythm(BaseModel):
+    buckets: list[RhythmBucket]
+    sentence: str
+
+
+class MonthlyDelta(BaseModel):
+    feature: str
+    label: str
+    this_value: float
+    prior_value: float
+    pct_delta: float
+    direction: Literal["up", "down", "flat"]
+
+
+class RoutineScore(BaseModel):
+    score: int
+    band: Literal["stabil", "wechselnd"]
+    sentence: str
+
+
+class PatternsScreen(BaseModel):
+    user_id: str
+    highlights: list[Highlight]
+    rhythm: Rhythm | None
+    monthly_deltas: list[MonthlyDelta]
+    routine: RoutineScore | None

@@ -33,6 +33,8 @@ def test_older_adult_home_returns_cards(populated_db: Path):
     # Senior week view feeds off week_distances (mirrors relative weekly_trend)
     assert body["week_distances"] is not None
     assert isinstance(body["week_distances"]["points"], list)
+    # Status reflects changepoint detection (calm but honest)
+    assert body["status"] in {"green", "amber"}
 
 
 def test_older_adult_home_places_carry_visit_counts(populated_db: Path):
@@ -67,3 +69,31 @@ def test_relative_insights_detail(populated_db: Path):
     # Places block carries per-place frequency rows (label + count), not a daily series
     for row in place_block["series"]:
         assert "label" in row and "count" in row
+
+
+def _hav_m(a, b):
+    import math
+
+    r = 6_371_000.0
+    p1, p2 = math.radians(a[0]), math.radians(b[0])
+    dp = math.radians(b[0] - a[0])
+    dl = math.radians(b[1] - a[1])
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(h))
+
+
+def test_schematic_walk_polyline_connects_to_home(populated_db: Path):
+    # The walk segmenter trims fixes inside HOME_RADIUS_M, so a naive
+    # start_ts..end_ts fix query leaves the drawn route floating ~50-70 m
+    # from the home pin. The map polyline must reach back to the doorstep.
+    client = TestClient(create_app(populated_db))
+    for url in ("/api/older-adult/home", "/api/relative/home"):
+        r = client.get(url, params={"user_id": "helga"})
+        assert r.status_code == 200
+        smap = r.json().get("schematic_map")
+        assert smap, f"{url}: expected schematic_map"
+        line = smap["walk_polyline"]
+        assert len(line) > 1
+        home = (smap["home_lat"], smap["home_lon"])
+        assert _hav_m(line[0], home) < 25.0, f"{url}: polyline start detached from home"
+        assert _hav_m(line[-1], home) < 25.0, f"{url}: polyline end detached from home"

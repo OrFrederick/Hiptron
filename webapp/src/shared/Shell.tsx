@@ -6,10 +6,11 @@ import { HIP } from "./theme";
 interface Props {
   children: ReactNode;
   active?: string;
+  mode?: "older" | "relative";
 }
 
 // Light app background, scrollable card stack, pinned bottom tab bar.
-export function Shell({ children, active = "home" }: Props) {
+export function Shell({ children, active = "home", mode = "older" }: Props) {
   return (
     <div
       style={{
@@ -37,7 +38,7 @@ export function Shell({ children, active = "home" }: Props) {
         </div>
       </div>
       <div style={{ position: "sticky", bottom: 0, maxWidth: 420, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
-        <BottomTabBar active={active} />
+        <BottomTabBar active={active} mode={mode} />
       </div>
     </div>
   );

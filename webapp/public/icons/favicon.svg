@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Hiptron">
+  <rect width="512" height="512" rx="112" fill="#0E2A47"/>
+  <!-- H monogram: two navy-white posts, green crossbar = the "link"/sensor signal -->
+  <rect x="120" y="128" width="64" height="256" rx="20" fill="#FFFFFF"/>
+  <rect x="328" y="128" width="64" height="256" rx="20" fill="#FFFFFF"/>
+  <rect x="152" y="228" width="208" height="56" rx="20" fill="#34A853"/>
+  <!-- sensor pulse dot -->
+  <circle cx="256" cy="256" r="30" fill="#0E2A47"/>
+  <circle cx="256" cy="256" r="15" fill="#34A853"/>
+</svg>

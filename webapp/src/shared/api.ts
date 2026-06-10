@@ -1,8 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 
-import type { InsightsDetail, OlderAdultHome, RelativeHome } from "./types";
+import type { InsightsDetail, OlderAdultHome, PatternsScreen, RelativeHome } from "./types";
 
 const DEFAULT_USER = "helga";
+
+// Static builds (GitHub Pages) ship pre-baked JSON snapshots instead of a live
+// backend: scripts/bake_static_api.py writes public/api/<endpoint>/<user>.json.
+const STATIC_API = import.meta.env.VITE_STATIC_API === "1";
+
+function apiUrl(endpoint: string, userId: string): string {
+  return STATIC_API
+    ? `${import.meta.env.BASE_URL}api/${endpoint}/${userId}.json`
+    : `/api/${endpoint}?user_id=${userId}`;
+}
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { credentials: "same-origin" });
@@ -14,7 +24,7 @@ export function useOlderAdultHome(userId: string = DEFAULT_USER) {
   return useQuery({
     queryKey: ["older-adult-home", userId],
     queryFn: () =>
-      fetchJson<OlderAdultHome>(`/api/older-adult/home?user_id=${userId}`),
+      fetchJson<OlderAdultHome>(apiUrl("older-adult/home", userId)),
   });
 }
 
@@ -22,7 +32,7 @@ export function useRelativeHome(userId: string = DEFAULT_USER) {
   return useQuery({
     queryKey: ["relative-home", userId],
     queryFn: () =>
-      fetchJson<RelativeHome>(`/api/relative/home?user_id=${userId}`),
+      fetchJson<RelativeHome>(apiUrl("relative/home", userId)),
   });
 }
 
@@ -30,6 +40,14 @@ export function useRelativeInsights(userId: string = DEFAULT_USER) {
   return useQuery({
     queryKey: ["relative-insights", userId],
     queryFn: () =>
-      fetchJson<InsightsDetail>(`/api/relative/insights?user_id=${userId}`),
+      fetchJson<InsightsDetail>(apiUrl("relative/insights", userId)),
+  });
+}
+
+export function useRelativePatterns(userId: string = DEFAULT_USER) {
+  return useQuery({
+    queryKey: ["relative-patterns", userId],
+    queryFn: () =>
+      fetchJson<PatternsScreen>(apiUrl("relative/patterns", userId)),
   });
 }

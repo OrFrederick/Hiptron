@@ -1,10 +1,15 @@
 import {
   Fragment,
+  useState,
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { Ic } from "./Icon";
+import { LeafletMap } from "./LeafletMap";
+import { MapModal } from "./MapModal";
+import { usePersona } from "./persona";
 import { HIP, type IconName } from "./theme";
 import type { SchematicMap } from "./types";
 
@@ -165,6 +170,7 @@ export function HeroCard({
   tagline = "Heute schon alles im Grünen?",
   avatar = "H",
   rightSlot,
+  onProfile,
 }: {
   greeting: string;
   name: string;
@@ -172,6 +178,7 @@ export function HeroCard({
   tagline?: string;
   avatar?: string;
   rightSlot?: ReactNode;
+  onProfile?: () => void;
 }) {
   return (
     <div
@@ -209,6 +216,7 @@ export function HeroCard({
           {rightSlot}
           <button
             aria-label="Profil"
+            onClick={onProfile}
             style={{ width: 44, height: 44, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer", background: "transparent" }}
           >
             <Avatar name={avatar} size={44} bg="rgba(255,255,255,0.22)" ring="rgba(255,255,255,0.35)" />
@@ -234,12 +242,14 @@ export function RelativeHeader({
   tone = "green",
   subtext,
   personaSlot,
+  onProfile,
 }: {
   greeting?: string;
   statusText?: string;
   tone?: "green" | "amber";
   subtext?: ReactNode;
   personaSlot?: ReactNode;
+  onProfile?: () => void;
 }) {
   return (
     <div
@@ -253,7 +263,7 @@ export function RelativeHeader({
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         {personaSlot}
-        <button aria-label="Profil" style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer" }}>
+        <button aria-label="Profil" onClick={onProfile} style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer" }}>
           <Avatar name="A" size={40} bg="rgba(255,255,255,0.22)" ring="rgba(255,255,255,0.35)" />
         </button>
       </div>
@@ -367,111 +377,62 @@ export function StatCard({
   );
 }
 
-// ── Map card (relative) — real schematic data on a muted faux-map ──
-const MAP_W = 320;
-const MAP_H = 230;
-const MAP_PAD = 26;
-
-function projectMap(map: SchematicMap) {
-  const pts: [number, number][] = [
-    [map.home_lat, map.home_lon],
-    ...map.places.map((p): [number, number] => [p.centroid_lat, p.centroid_lon]),
-    ...map.walk_polyline,
-  ];
-  const lats = pts.map(([la]) => la);
-  const lons = pts.map(([, lo]) => lo);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLon = Math.min(...lons);
-  const maxLon = Math.max(...lons);
-  const dLat = Math.max(1e-6, maxLat - minLat);
-  const dLon = Math.max(1e-6, maxLon - minLon);
-  const project = (lat: number, lon: number): [number, number] => {
-    const x = MAP_PAD + ((lon - minLon) / dLon) * (MAP_W - MAP_PAD * 2);
-    const y = MAP_H - MAP_PAD - ((lat - minLat) / dLat) * (MAP_H - MAP_PAD * 2);
-    return [x, y];
-  };
-  return {
-    home: project(map.home_lat, map.home_lon),
-    line: map.walk_polyline.map(([la, lo]) => project(la, lo)),
-  };
-}
-
+// ── Map card (relative) — real OpenStreetMap tiles + the actual GPS route ──
 export function MapCard({
   map,
   avatar = "H",
   callout = "Unterwegs",
+  mapTitle = "Karte",
   onClick,
 }: {
   map: SchematicMap;
   avatar?: string;
   callout?: string;
+  mapTitle?: string;
   onClick?: () => void;
 }) {
-  const { home, line } = projectMap(map);
-  const last = line[line.length - 1] ?? home;
-  const routeD = line.map((p, i) => `${i ? "L" : "M"} ${p[0]} ${p[1]}`).join(" ");
-  return (
-    <Card style={{ padding: 8, overflow: "hidden", cursor: onClick ? "pointer" : "default" }} ariaLabel="Karte der heutigen Runde" onClick={onClick}>
-      <div style={{ borderRadius: 18, overflow: "hidden", position: "relative" }}>
-        <svg
-          viewBox={`0 0 ${MAP_W} ${MAP_H}`}
-          width="100%"
-          height="210"
-          preserveAspectRatio="xMidYMid slice"
-          style={{ display: "block", background: "#EAEEF4" }}
-          role="img"
-          aria-label="Vereinfachte Karte mit Route"
-        >
-          <path d="M-10 -10 H150 L160 36 L120 64 L60 58 L-10 40 Z" fill="#E2ECDD" />
-          <path d="M-10 186 Q90 168 180 190 T330 196 V240 H-10 Z" fill="#DCE7F0" />
-          {[
-            [40, 92, 34, 22],
-            [82, 96, 24, 20],
-            [112, 92, 26, 24],
-            [180, 86, 30, 22],
-            [216, 90, 26, 24],
-            [250, 96, 30, 20],
-            [40, 150, 30, 18],
-            [176, 150, 30, 20],
-            [214, 150, 26, 18],
-          ].map(([x, y, w, h], i) => (
-            <rect key={i} x={x} y={y} width={w} height={h} rx="3" fill="#F1F3F7" stroke="#E0E5ED" strokeWidth="1" />
-          ))}
-          {["M-10 132 Q90 122 170 130 T330 126", "M150 -10 Q156 60 150 130 Q146 190 156 240", "M-10 70 Q70 64 150 78"].map((d, i) => (
-            <path key={i} d={d} fill="none" stroke="#FBFCFE" strokeWidth="7" strokeLinecap="round" />
-          ))}
-          {routeD && (
-            <>
-              <path d={routeD} fill="none" stroke={c.blue600} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" opacity="0.22" />
-              <path d={routeD} fill="none" stroke={c.blue600} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="1 8" />
-            </>
-          )}
-          <g>
-            <circle cx={home[0]} cy={home[1]} r="10" fill="#fff" stroke={c.green500} strokeWidth="2.4" />
-            <circle cx={home[0]} cy={home[1]} r="4" fill={c.green500} />
-          </g>
-        </svg>
+  const [modalOpen, setModalOpen] = useState(false);
 
-        <div style={{ position: "absolute", left: `${(last[0] / MAP_W) * 100}%`, top: `${(last[1] / MAP_H) * 100}%`, transform: "translate(-50%, -100%)" }}>
-          <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ background: c.navy900, borderRadius: "50%", padding: 3, boxShadow: HIP.shadow.btn }}>
-              <Avatar name={avatar} size={34} bg={c.navy700} color="#fff" />
-            </div>
-            <div style={{ width: 0, height: 0, borderLeft: "7px solid transparent", borderRight: "7px solid transparent", borderTop: `9px solid ${c.navy900}`, marginTop: -1 }} />
+  return (
+    <>
+      <Card style={{ padding: 8, overflow: "hidden" }} ariaLabel="Karte der heutigen Runde">
+        {/* Map area — tapping opens the full-screen overlay */}
+        <div
+          role="button"
+          aria-label="Karte vergrößern"
+          tabIndex={0}
+          onClick={() => setModalOpen(true)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setModalOpen(true); }}
+          style={{ borderRadius: 18, overflow: "hidden", position: "relative", isolation: "isolate", cursor: "pointer" }}
+        >
+          <LeafletMap map={map} height={210} lastSeenInitial={avatar} />
+          <div style={{ position: "absolute", left: 12, bottom: 12, zIndex: 2, background: c.white, borderRadius: HIP.radius.pill, padding: "7px 13px", boxShadow: HIP.shadow.soft, display: "inline-flex", alignItems: "center", gap: 7 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.green500, flexShrink: 0 }} />
+            <span style={{ fontSize: 13.5, fontWeight: 600, color: c.textDark }}>{callout}</span>
           </div>
         </div>
-
-        <div style={{ position: "absolute", left: 12, bottom: 12, background: c.white, borderRadius: HIP.radius.pill, padding: "7px 13px", boxShadow: HIP.shadow.soft, display: "inline-flex", alignItems: "center", gap: 7 }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.green500, flexShrink: 0 }} />
-          <span style={{ fontSize: 13.5, fontWeight: 600, color: c.textDark }}>{callout}</span>
+        {/* Caption row — tapping navigates to detail (old onClick behaviour) */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={onClick}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick?.(); }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 10px 6px", cursor: onClick ? "pointer" : "default" }}
+        >
+          <div style={{ fontSize: 13.5, color: c.textMuted }}>Letzte Route · zuletzt gesehen</div>
+          <Ic name="chevron" size={18} color={c.textMuted} sw={2} />
         </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 10px 6px" }}>
-        <div style={{ fontSize: 13.5, color: c.textMuted }}>Ungefähre Route · zuletzt gesehen</div>
-        <Ic name="chevron" size={18} color={c.textMuted} sw={2} />
-      </div>
-    </Card>
+      </Card>
+
+      {modalOpen && (
+        <MapModal
+          map={map}
+          title={mapTitle}
+          lastSeenInitial={avatar}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
@@ -644,14 +605,28 @@ export function InsightBlock({
   );
 }
 
-// ── Bottom tab bar (prototype nav — Start is the only live route) ──
-export function BottomTabBar({ active = "home" }: { active?: string }) {
-  const tabs: { id: string; label: string; icon: IconName }[] = [
-    { id: "home", label: "Start", icon: "house" },
-    { id: "standort", label: "Standort", icon: "pin" },
-    { id: "statistik", label: "Statistik", icon: "bars" },
-    { id: "profil", label: "Profil", icon: "shield" },
-  ];
+// ── Bottom tab bar (live nav — every tab routes to a real screen) ──
+export function BottomTabBar({
+  active = "home",
+  mode = "older",
+}: {
+  active?: string;
+  mode?: "older" | "relative";
+}) {
+  const navigate = useNavigate();
+  const userId = usePersona();
+  const tabs: { id: string; label: string; icon: IconName; to: string }[] =
+    mode === "older"
+      ? [
+          { id: "home", label: "Start", icon: "house", to: `/older-adult?u=${userId}` },
+          { id: "stats", label: "Meine Woche", icon: "bars", to: `/older-adult/week?u=${userId}` },
+          { id: "profil", label: "Profil", icon: "shield", to: `/profil?u=${userId}&m=older` },
+        ]
+      : [
+          { id: "home", label: "Start", icon: "house", to: `/relative?u=${userId}` },
+          { id: "stats", label: "Einblicke", icon: "bars", to: `/relative/insights?u=${userId}` },
+          { id: "profil", label: "Profil", icon: "shield", to: `/profil?u=${userId}&m=relative` },
+        ];
   return (
     <div
       style={{
@@ -671,6 +646,7 @@ export function BottomTabBar({ active = "home" }: { active?: string }) {
             key={t.id}
             aria-label={t.label}
             aria-current={on ? "page" : undefined}
+            onClick={() => navigate(t.to)}
             style={{
               flex: 1,
               border: "none",

@@ -58,15 +58,17 @@ describe("Senior Week View", () => {
   it("shows the week distance card and the visited places with German labels", async () => {
     renderView();
     await waitFor(() =>
-      expect(screen.getByText("Meine Woche")).toBeInTheDocument(),
+      expect(screen.getByText("Deine Woche")).toBeInTheDocument(),
     );
-    expect(screen.getByText("Deine Woche")).toBeInTheDocument();
+    // "Meine Woche" appears as both the section label and the bottom tab.
+    expect(screen.getAllByText("Meine Woche").length).toBeGreaterThan(0);
     expect(
       screen.getByText(/Jeder Balken ist ein Tag/i),
     ).toBeInTheDocument();
-    // Per-place frequency rows, German labels + counts
+    // Per-place frequency rows: German labels + warm frequency words (no cold "×" counts).
     expect(screen.getByText("Bäckerei")).toBeInTheDocument();
     expect(screen.getByText("Park")).toBeInTheDocument();
-    expect(screen.getByText("5×")).toBeInTheDocument();
+    expect(screen.getByText("fast immer")).toBeInTheDocument(); // most-visited spot
+    expect(screen.getByText("oft")).toBeInTheDocument();
   });
 });
