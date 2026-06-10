@@ -81,6 +81,10 @@ def _m_to_deg_lon(m: float, at_lat: float) -> float:
 def generate(scenario: Scenario, con: duckdb.DuckDBPyConnection) -> None:
     """Write synthetic GPS fixes for `scenario` into the `gps_fixes` table."""
     rng = random.Random(scenario.seed)
+    # Separate stream for all gait-related draws (pause placement/holds): keeps the
+    # main draw sequence bit-identical to pre-gait code, so route/place/changepoint
+    # timing of existing personas does not drift.
+    gait_rng = random.Random(f"{scenario.seed}-gait")
     rows: list[tuple[str, datetime, float, float, float]] = []
 
     start = scenario.start().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -114,7 +118,9 @@ def generate(scenario: Scenario, con: duckdb.DuckDBPyConnection) -> None:
             start_dt = intended
             if next_free is not None and start_dt < next_free:
                 start_dt = next_free
-            end_dt = _emit_outing(rows, scenario, place, start_dt, decline_factor, rng)
+            end_dt = _emit_outing(
+                rows, scenario, place, start_dt, decline_factor, rng, week_idx, gait_rng
+            )
             outing_spans.append((start_dt, end_dt))
             next_free = end_dt + timedelta(minutes=15)
         day += timedelta(days=1)
@@ -168,6 +174,24 @@ def _outings_for_week(scenario: Scenario, week_idx: int) -> int:
     return max(1, base - 1 - weeks_in // 3)
 
 
+def _gait_speed_mps(scenario: Scenario, week_idx: int) -> float:
+    """Transit speed for this week: base speed, optionally declining after onset."""
+    speed = scenario.walk_speed_mps
+    start = scenario.speed_decline_start_week
+    if start is not None and week_idx >= start and scenario.speed_decline_pct_per_week > 0:
+        weeks_in = week_idx - start + 1
+        speed *= max(0.6, 1.0 - scenario.speed_decline_pct_per_week / 100.0 * weeks_in)
+    return speed
+
+
+def _fade_factor(scenario: Scenario, week_idx: int) -> float:
+    """Return-leg speed multiplier (<1 = slower towards the end of the walk)."""
+    start = scenario.speed_decline_start_week
+    if scenario.walk_fade_pct > 0 and start is not None and week_idx >= start:
+        return 1.0 - scenario.walk_fade_pct / 100.0
+    return 1.0
+
+
 def _places_for_week(
     scenario: Scenario, week_idx: int, rng: random.Random
 ) -> tuple[NamedPlace, ...]:
@@ -204,13 +228,19 @@ def _emit_outing(
     start_dt: datetime,
     decline_factor: float,
     rng: random.Random,
+    week_idx: int,
+    gait_rng: random.Random,  # reserved for Task 4 pause draws; threaded here unused
 ) -> datetime:
     """Emit one outing's GPS fixes. Personas with baked street routes walk real
     OSM streets; everyone else falls back to the geometric arc model."""
     user_route = _routes().get(scenario.user_id)
     if user_route is not None and place.label in user_route.get("places", {}):
-        return _emit_outing_routed(rows, scenario, place, start_dt, decline_factor, rng, user_route)
-    return _emit_outing_arc(rows, scenario, place, start_dt, decline_factor, rng)
+        return _emit_outing_routed(
+            rows, scenario, place, start_dt, decline_factor, rng, user_route, week_idx, gait_rng
+        )
+    return _emit_outing_arc(
+        rows, scenario, place, start_dt, decline_factor, rng, week_idx, gait_rng
+    )
 
 
 def _emit_outing_routed(
@@ -221,6 +251,8 @@ def _emit_outing_routed(
     decline_factor: float,
     rng: random.Random,
     route: dict[str, Any],
+    week_idx: int,
+    gait_rng: random.Random,  # reserved for Task 4 pause draws; threaded here unused
 ) -> datetime:
     """Walk real streets: a near-home block-loop spur pads the distance, then the
     spine carries the user out to the snapped on-street place, dwell, and back.
@@ -239,9 +271,9 @@ def _emit_outing_routed(
     )
     oneway_m = round_trip_m / 2.0
 
-    step_s = TRANSIT_STEP_S
-    if scenario.fatigue_onset_week is not None:
-        step_s = int(TRANSIT_STEP_S / 0.9)
+    speed = _gait_speed_mps(scenario, week_idx)
+    step_out_s = TRANSIT_STEP_M / speed
+    step_back_s = step_out_s / _fade_factor(scenario, week_idx)
 
     # Pad spur: walk out along the block loop and back, so the spur starts and ends
     # at home and joins the spine seamlessly. Its length tops up the spine to oneway.
@@ -265,7 +297,7 @@ def _emit_outing_routed(
     t = start_dt
     for lat, lon in outbound:
         emit_ll(lat, lon, t, 1.5)
-        t += timedelta(seconds=step_s)
+        t += timedelta(seconds=step_out_s)
 
     dwell_min = rng.randint(10, 40)
     for _ in range(dwell_min * 60 // DWELL_SAMPLE_S):
@@ -274,7 +306,7 @@ def _emit_outing_routed(
 
     for lat, lon in reversed(outbound):
         emit_ll(lat, lon, t, 1.5)
-        t += timedelta(seconds=step_s)
+        t += timedelta(seconds=step_back_s)
     return t
 
 
@@ -285,6 +317,8 @@ def _emit_outing_arc(
     start_dt: datetime,
     decline_factor: float,
     rng: random.Random,
+    week_idx: int,
+    gait_rng: random.Random,  # reserved for Task 4 pause draws; threaded here unused
 ) -> datetime:
     # Work in a local metre plane centred on home: x = east, y = north.
     east_m = place.lon_offset_m
@@ -297,9 +331,9 @@ def _emit_outing_arc(
     )
     oneway_m = round_trip_m / 2.0
 
-    step_s = TRANSIT_STEP_S
-    if scenario.fatigue_onset_week is not None:
-        step_s = int(TRANSIT_STEP_S / 0.9)
+    speed = _gait_speed_mps(scenario, week_idx)
+    step_out_s = TRANSIT_STEP_M / speed
+    step_back_s = step_out_s / _fade_factor(scenario, week_idx)
 
     # Unit perpendicular to the home->place direction (for the route's bow).
     if straight_m < 1.0:
@@ -337,7 +371,7 @@ def _emit_outing_arc(
     for i in range(n_steps + 1):
         x_m, y_m = curve(i / n_steps, out_sign)
         emit(x_m, y_m, t, 1.5)
-        t += timedelta(seconds=step_s)
+        t += timedelta(seconds=step_out_s)
 
     # Dwell at the destination: densely sampled, near-stationary, tightly clustered.
     dwell_min = rng.randint(10, 40)
@@ -349,5 +383,5 @@ def _emit_outing_arc(
     for i in range(1, n_steps + 1):
         x_m, y_m = curve(1.0 - i / n_steps, -out_sign)
         emit(x_m, y_m, t, 1.5)
-        t += timedelta(seconds=step_s)
+        t += timedelta(seconds=step_back_s)
     return t
