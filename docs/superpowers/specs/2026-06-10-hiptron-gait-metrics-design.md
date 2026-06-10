@@ -15,9 +15,16 @@ These three were previously excluded as "gait-decline diagnostics" under the not
 3. **Placement:** relative-mode Patterns screen (`Rückblick & Muster`) only. OA app unchanged ("OA gains exactly ONE thing" rule stands; older adult never sees own gait decline).
 4. **Display style:** real numbers + trends (weekly km/h line, pause counts, % slower in last third), observation wording around them.
 
-## What already exists (no pipeline changes needed)
+## What already exists / stage-2 amendments (revised 2026-06-10 during build)
 
-Stage 2 (`hiptron/pipeline/stages/_02_walk_features.py`) already computes per-walk: `mean_speed`, `peak_speed`, `pause_count` (speed dips < 0.3 m/s), `dwell_s`, `speed_third_delta_pct` (last-third vs first-third speed, %). Stage 4 already aggregates daily `fatigue_index` (avg non-zero third-delta). `TRACKED_FEATURES` (stages 5/6) **stays unchanged** — no new baselines, changepoints, or insights, so each persona's existing amber story stays unique and the caregiver-home logic is untouched.
+Stage 2 (`hiptron/pipeline/stages/_02_walk_features.py`) already computes per-walk: `mean_speed`, `peak_speed`, `pause_count`, `dwell_s`, `speed_third_delta_pct` (last-third vs first-third speed, %). The original "no pipeline changes" rule was **lifted for stage 2** after measurement on real demo data showed two artifacts:
+
+1. **Speed contamination:** `distance_m` includes destination-dwell GPS-jitter path length while `dwell_s` only removes the time, so `distance/(duration−dwell)` *inflates* as dwell dominates — helga's late (short-walk, long-dwell) weeks read FASTER, flipping her trend to "up". Fix: stage 2 stores `transit_m`/`transit_s` (sums over segments ≥ 0.3 m/s only); read-side speed = `sum(transit_m)/sum(transit_s)`.
+2. **Pause baseline noise:** routed paths contain structural zero-distance segments (spur turnaround, spur→spine junction, spine endpoint) each registering as a 1-segment "pause" (15–24 s at persona speeds) → raw baseline ≈ 4, not 1. Fix: `pause_count` only counts stops ≥ `PAUSE_MIN_S = 30 s`; generator holds raised to 30–90 s (still < 120 s place threshold). Baseline = destination stop ≈ 1, read-side subtracts it.
+
+`TRACKED_FEATURES` (stages 5/6) **stays unchanged** — no new baselines, changepoints, or insights, so each persona's existing amber story stays unique and the caregiver-home logic is untouched.
+
+**Helga amber restoration (scope addition):** discovered during build — on the pinned timeline her last distance changepoint (2026-05-11) falls outside the 14-day caregiver amber window, so she reads green on every fresh reseed (pre-existing regression, not caused by this build). Her distance-decline timing (`decline_start_week`/`distance_decline_pct_per_week`) is retuned so the changepoint lands within 14 days of `DEMO_END`, restoring amber.
 
 ## Generator changes (`hiptron/synthetic/scenarios.py`, `generator.py`)
 
@@ -28,7 +35,7 @@ New `Scenario` fields (all default to "no signal"):
 | `walk_speed_mps` (base) | 1.15 | 1.1 | 1.0 | 1.25 |
 | `speed_decline_pct_per_week` / onset week | 3.5 / wk 6 | — | — | — |
 | within-walk fade (last third slower, post-onset) | ~20% | — | — | — |
-| `pauses_per_walk` (range) / dwell each | — | — | 2–4 / 20–90 s | — |
+| `pauses_per_walk` (range) / dwell each | — | — | 2–4 / 30–90 s (from wk 8) | — |
 
 Mechanics:
 

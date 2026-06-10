@@ -701,14 +701,15 @@ def _time_outdoors(
 def _walking_speed(
     con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
 ) -> WalkingSpeed | None:
-    # Moving speed = distance / (duration - dwell): walk_features.mean_speed divides
-    # by the full duration including the 10-40 min destination dwell, which would
-    # measure dwell randomness, not gait. Subtracting dwell_s (all sub-0.3 m/s time)
-    # recovers transit speed from existing columns. Shown as an observation, not a verdict.
+    # Moving speed = transit_m / transit_s (stage-2 sums over segments >= 0.3 m/s).
+    # NOT mean_speed and NOT distance/(duration-dwell): distance_m accumulates
+    # destination-dwell jitter path while dwell_s removes only the time, which
+    # INFLATES speed on short walks with long dwells (helga's late weeks read
+    # faster). Transit-only sums are the honest gait inputs.
     weekly_rows = con.execute(
         """
         SELECT CAST(date_trunc('week', w.start_ts) AS DATE) AS wk,
-               sum(wf.distance_m) / nullif(sum(wf.duration_s - wf.dwell_s), 0) AS mps
+               sum(wf.transit_m) / nullif(sum(wf.transit_s), 0) AS mps
         FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
         WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) > ? - INTERVAL 84 DAY
         GROUP BY 1 ORDER BY 1
@@ -723,12 +724,12 @@ def _walking_speed(
     row = con.execute(
         """
         SELECT
-          sum(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY THEN wf.distance_m END)
+          sum(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY THEN wf.transit_m END)
             / nullif(sum(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY
-                              THEN wf.duration_s - wf.dwell_s END), 0) AS this_mps,
-          sum(CASE WHEN CAST(w.start_ts AS DATE) <= ? - INTERVAL 28 DAY THEN wf.distance_m END)
+                              THEN wf.transit_s END), 0) AS this_mps,
+          sum(CASE WHEN CAST(w.start_ts AS DATE) <= ? - INTERVAL 28 DAY THEN wf.transit_m END)
             / nullif(sum(CASE WHEN CAST(w.start_ts AS DATE) <= ? - INTERVAL 28 DAY
-                              THEN wf.duration_s - wf.dwell_s END), 0) AS prior_mps,
+                              THEN wf.transit_s END), 0) AS prior_mps,
           count(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY THEN 1 END) AS n_this
         FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
         WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) > ? - INTERVAL 56 DAY
@@ -769,18 +770,17 @@ def _walking_speed(
 def _pause_stats(
     con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
 ) -> PauseStats | None:
-    # GREATEST(pause_count - 4, 0): stage-2 routed paths register ~4 baseline stops —
-    # one destination dwell, typically two spur-turnaround blips, plus one doorstep
-    # transition — for every outing. Subtracting 4 isolates genuine mid-walk pauses.
-    # Dwell minutes are NOT shown (dwell_s is dominated by the destination dwell and
-    # cannot be separated read-side).
+    # GREATEST(pause_count - 1, 0): with the stage-2 >= 30 s pause floor, the only
+    # baseline stop per outing is the destination dwell; subtracting it isolates
+    # genuine mid-walk pauses. Dwell minutes are NOT shown (dwell_s is dominated by
+    # the destination dwell and cannot be separated read-side).
     row = con.execute(
         """
         SELECT
           avg(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY
-                   THEN GREATEST(wf.pause_count - 4, 0) END) AS this_p,
+                   THEN GREATEST(wf.pause_count - 1, 0) END) AS this_p,
           avg(CASE WHEN CAST(w.start_ts AS DATE) <= ? - INTERVAL 28 DAY
-                   THEN GREATEST(wf.pause_count - 4, 0) END) AS prior_p,
+                   THEN GREATEST(wf.pause_count - 1, 0) END) AS prior_p,
           count(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY THEN 1 END) AS n_this
         FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
         WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) > ? - INTERVAL 56 DAY
@@ -795,11 +795,9 @@ def _pause_stats(
     this_v = float(this_p)
     prior_v = float(prior_p or 0.0)
     # Absolute gate: prior averages sit near zero, percent deltas would be unstable.
-    # Threshold 0.65 gives clear separation between margarete's +0.69 ("up") and otto's
-    # +0.11 ("flat") on the demo fixture.
     diff = this_v - prior_v
     direction: Literal["up", "down", "flat"] = (
-        "flat" if abs(diff) < 0.65 else ("up" if diff > 0 else "down")
+        "flat" if abs(diff) < 0.7 else ("up" if diff > 0 else "down")
     )
     if this_v < 0.5 and direction == "flat":
         sentence = "Geht meist ohne Zwischenstopp durch."
