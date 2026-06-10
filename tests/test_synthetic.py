@@ -52,3 +52,39 @@ def test_generator_is_deterministic_with_seed(tmp_db):
     generate(BASELINE_SCENARIO, tmp_db)
     rows_b = tmp_db.execute("SELECT lat, lon FROM gps_fixes ORDER BY ts LIMIT 100").fetchall()
     assert rows_a == rows_b
+
+
+def test_gait_fields_default_to_no_signal():
+    # Default speed equals the historic implicit speed (22 m / 15 s), so scenarios
+    # that don't set gait fields produce byte-identical timing behaviour.
+    s = Scenario(
+        user_id="t", seed=1, weeks=2, home_lat=52.0, home_lon=13.0,
+        outings_per_day=1, mean_outing_distance_m=800.0,
+    )
+    assert abs(s.walk_speed_mps - 22.0 / 15.0) < 1e-9
+    assert s.speed_decline_pct_per_week == 0.0
+    assert s.speed_decline_start_week is None
+    assert s.walk_fade_pct == 0.0
+    assert s.pauses_per_walk is None
+    assert s.pause_start_week is None
+
+
+def test_demo_personas_gait_values():
+    from hiptron.synthetic.scenarios import SCENARIOS
+
+    helga = SCENARIOS["helga"]
+    assert helga.walk_speed_mps == 1.15
+    assert helga.speed_decline_pct_per_week == 3.5
+    assert helga.speed_decline_start_week == 6
+    assert helga.walk_fade_pct == 20.0
+
+    margarete = SCENARIOS["margarete"]
+    assert margarete.walk_speed_mps == 1.0
+    assert margarete.pauses_per_walk == (2, 4)
+    assert margarete.pause_start_week == 6
+
+    assert SCENARIOS["otto"].walk_speed_mps == 1.1
+    assert SCENARIOS["ingrid"].walk_speed_mps == 1.25
+    for u in ("otto", "ingrid"):
+        assert SCENARIOS[u].pauses_per_walk is None
+        assert SCENARIOS[u].walk_fade_pct == 0.0

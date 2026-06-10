@@ -29,6 +29,19 @@ class Scenario:
     places: tuple["NamedPlace", ...] | None = None
     place_shrink_start_week: int | None = None
     end_dt: datetime | None = None
+    # ── Gait (read by the generator; all defaults mean "no signal") ──
+    # Default = the historic implicit transit speed TRANSIT_STEP_M / TRANSIT_STEP_S
+    # (22 m / 15 s). Hardcoded to avoid a circular import with generator.py.
+    walk_speed_mps: float = 22.0 / 15.0
+    speed_decline_pct_per_week: float = 0.0
+    speed_decline_start_week: int | None = None
+    # Within-walk fade: the return leg is emitted this % slower once
+    # speed_decline_start_week is reached (drives speed_third_delta_pct).
+    walk_fade_pct: float = 0.0
+    # Mid-walk pauses: (min, max) short holds per outing from pause_start_week on.
+    # Each hold is 20–90 s — hard-capped under the 120 s place-cluster threshold.
+    pauses_per_walk: tuple[int, int] | None = None
+    pause_start_week: int | None = None
 
     def end(self) -> datetime:
         return self.end_dt or datetime.now()
@@ -89,6 +102,10 @@ HELGA_SCENARIO = Scenario(
     distance_decline_pct_per_week=18.0,
     decline_start_week=6,
     end_dt=DEMO_END,
+    walk_speed_mps=1.15,
+    speed_decline_pct_per_week=3.5,
+    speed_decline_start_week=6,
+    walk_fade_pct=20.0,
 )
 
 # Otto's "smaller world": full repertoire until late, then a sharp recent collapse
@@ -105,6 +122,7 @@ OTTO_SCENARIO = Scenario(
     place_repertoire_shrink=True,
     place_shrink_start_week=10,
     end_dt=DEMO_END,
+    walk_speed_mps=1.1,
 )
 
 MARGARETE_SCENARIO = Scenario(
@@ -117,6 +135,9 @@ MARGARETE_SCENARIO = Scenario(
     mean_outing_distance_m=1000.0,
     outings_decline_start_week=6,
     end_dt=DEMO_END,
+    walk_speed_mps=1.0,
+    pauses_per_walk=(2, 4),
+    pause_start_week=6,
 )
 
 # Healthy control: no decline knobs. Seed chosen so the pinned-date data yields
@@ -130,6 +151,7 @@ INGRID_SCENARIO = Scenario(
     outings_per_day=2,
     mean_outing_distance_m=1300.0,
     end_dt=DEMO_END,
+    walk_speed_mps=1.25,
 )
 
 
