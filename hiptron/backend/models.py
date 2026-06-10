@@ -123,6 +123,34 @@ class TimeOutdoors(BaseModel):
     sentence: str
 
 
+class SpeedPoint(BaseModel):
+    week_start: dt.date
+    kmh: float
+
+
+class WalkingSpeed(BaseModel):
+    weekly: list[SpeedPoint]
+    this_kmh: float
+    prior_kmh: float
+    pct_delta: float
+    direction: Literal["up", "down", "flat"]
+    sentence: str
+
+
+class PauseStats(BaseModel):
+    avg_pauses_per_walk: float
+    prior_avg: float
+    direction: Literal["up", "down", "flat"]
+    sentence: str
+
+
+class WalkFade(BaseModel):
+    this_delta_pct: float
+    prior_delta_pct: float
+    direction: Literal["up", "down", "flat"]
+    sentence: str
+
+
 class PatternsScreen(BaseModel):
     user_id: str
     highlights: list[Highlight]
@@ -130,3 +158,6 @@ class PatternsScreen(BaseModel):
     monthly_deltas: list[MonthlyDelta]
     routine: RoutineScore | None
     time_outdoors: TimeOutdoors | None = None
+    walking_speed: WalkingSpeed | None = None
+    pauses: PauseStats | None = None
+    walk_fade: WalkFade | None = None

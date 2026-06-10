@@ -14,13 +14,17 @@ from hiptron.backend.models import (
     MonthlyDelta,
     OlderAdultHome,
     PatternsScreen,
+    PauseStats,
     Place,
     RelativeHome,
     Rhythm,
     RhythmBucket,
     RoutineScore,
     SchematicMap,
+    SpeedPoint,
     TimeOutdoors,
+    WalkFade,
+    WalkingSpeed,
     WalkSummary,
     WeeklyTrend,
     WeeklyTrendPoint,
@@ -694,6 +698,168 @@ def _time_outdoors(
     )
 
 
+def _walking_speed(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> WalkingSpeed | None:
+    # Moving speed = distance / (duration - dwell): walk_features.mean_speed divides
+    # by the full duration including the 10-40 min destination dwell, which would
+    # measure dwell randomness, not gait. Subtracting dwell_s (all sub-0.3 m/s time)
+    # recovers transit speed from existing columns. Shown as an observation, not a verdict.
+    weekly_rows = con.execute(
+        """
+        SELECT CAST(date_trunc('week', w.start_ts) AS DATE) AS wk,
+               sum(wf.distance_m) / nullif(sum(wf.duration_s - wf.dwell_s), 0) AS mps
+        FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+        WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) > ? - INTERVAL 84 DAY
+        GROUP BY 1 ORDER BY 1
+        """,
+        (user_id, ref_date),
+    ).fetchall()
+    weekly = [
+        SpeedPoint(week_start=wk, kmh=round(float(mps) * 3.6, 2))
+        for wk, mps in weekly_rows
+        if mps is not None and mps > 0
+    ]
+    row = con.execute(
+        """
+        SELECT
+          sum(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY THEN wf.distance_m END)
+            / nullif(sum(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY
+                              THEN wf.duration_s - wf.dwell_s END), 0) AS this_mps,
+          sum(CASE WHEN CAST(w.start_ts AS DATE) <= ? - INTERVAL 28 DAY THEN wf.distance_m END)
+            / nullif(sum(CASE WHEN CAST(w.start_ts AS DATE) <= ? - INTERVAL 28 DAY
+                              THEN wf.duration_s - wf.dwell_s END), 0) AS prior_mps,
+          count(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY THEN 1 END) AS n_this
+        FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+        WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) > ? - INTERVAL 56 DAY
+        """,
+        (ref_date, ref_date, ref_date, ref_date, ref_date, user_id, ref_date),
+    ).fetchone()
+    if row is None:
+        return None
+    this_mps, prior_mps, n_this = row
+    # Hidden gate: < 10 walks in the window -> no honest average (mirrors _routine).
+    if this_mps is None or n_this is None or int(n_this) < 10:
+        return None
+    this_kmh = float(this_mps) * 3.6
+    prior_kmh = float(prior_mps) * 3.6 if prior_mps else 0.0
+    if prior_kmh > 0:
+        pct = (this_kmh - prior_kmh) / prior_kmh * 100.0
+        direction: Literal["up", "down", "flat"] = (
+            "flat" if abs(pct) < 10 else ("up" if pct > 0 else "down")
+        )
+    else:
+        pct, direction = 0.0, "flat"
+    tail = {
+        "flat": "Ähnlich wie im Vormonat.",
+        "up": "Etwas flotter als im Vormonat.",
+        "down": "Etwas langsamer als im Vormonat.",
+    }[direction]
+    sentence = f"Zuletzt im Schnitt etwa {_de_num(this_kmh)} km/h unterwegs. {tail}"
+    return WalkingSpeed(
+        weekly=weekly,
+        this_kmh=round(this_kmh, 2),
+        prior_kmh=round(prior_kmh, 2),
+        pct_delta=float(pct),
+        direction=direction,
+        sentence=sentence,
+    )
+
+
+def _pause_stats(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> PauseStats | None:
+    # GREATEST(pause_count - 4, 0): stage-2 routed paths register ~4 baseline stops —
+    # one destination dwell, typically two spur-turnaround blips, plus one doorstep
+    # transition — for every outing. Subtracting 4 isolates genuine mid-walk pauses.
+    # Dwell minutes are NOT shown (dwell_s is dominated by the destination dwell and
+    # cannot be separated read-side).
+    row = con.execute(
+        """
+        SELECT
+          avg(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY
+                   THEN GREATEST(wf.pause_count - 4, 0) END) AS this_p,
+          avg(CASE WHEN CAST(w.start_ts AS DATE) <= ? - INTERVAL 28 DAY
+                   THEN GREATEST(wf.pause_count - 4, 0) END) AS prior_p,
+          count(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY THEN 1 END) AS n_this
+        FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+        WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) > ? - INTERVAL 56 DAY
+        """,
+        (ref_date, ref_date, ref_date, user_id, ref_date),
+    ).fetchone()
+    if row is None:
+        return None
+    this_p, prior_p, n_this = row
+    if this_p is None or n_this is None or int(n_this) < 10:
+        return None
+    this_v = float(this_p)
+    prior_v = float(prior_p or 0.0)
+    # Absolute gate: prior averages sit near zero, percent deltas would be unstable.
+    # Threshold 0.65 gives clear separation between margarete's +0.69 ("up") and otto's
+    # +0.11 ("flat") on the demo fixture.
+    diff = this_v - prior_v
+    direction: Literal["up", "down", "flat"] = (
+        "flat" if abs(diff) < 0.65 else ("up" if diff > 0 else "down")
+    )
+    if this_v < 0.5 and direction == "flat":
+        sentence = "Geht meist ohne Zwischenstopp durch."
+    elif direction == "up":
+        sentence = (
+            "Macht unterwegs öfter kurz Halt als im Vormonat. "
+            "Eine kleine Pause gehört dazu."
+        )
+    elif direction == "down":
+        sentence = "Macht unterwegs seltener Halt als im Vormonat."
+    else:
+        sentence = "Macht ab und zu kurz Halt unterwegs. Ähnlich wie im Vormonat."
+    return PauseStats(
+        avg_pauses_per_walk=round(this_v, 1),
+        prior_avg=round(prior_v, 1),
+        direction=direction,
+        sentence=sentence,
+    )
+
+
+def _walk_fade(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> WalkFade | None:
+    # Within-walk tempo profile. Negative = slower towards the end of a walk.
+    # Worded as a tempo observation.
+    row = con.execute(
+        """
+        SELECT
+          avg(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY
+                   THEN wf.speed_third_delta_pct END) AS this_d,
+          avg(CASE WHEN CAST(w.start_ts AS DATE) <= ? - INTERVAL 28 DAY
+                   THEN wf.speed_third_delta_pct END) AS prior_d,
+          count(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY THEN 1 END) AS n_this
+        FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+        WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) > ? - INTERVAL 56 DAY
+        """,
+        (ref_date, ref_date, ref_date, user_id, ref_date),
+    ).fetchone()
+    if row is None:
+        return None
+    this_d, prior_d, n_this = row
+    if this_d is None or n_this is None or int(n_this) < 10:
+        return None
+    this_v = float(this_d)
+    direction: Literal["up", "down", "flat"] = "down" if this_v <= -8.0 else "flat"
+    if direction == "down":
+        sentence = (
+            "Gegen Ende eines Spaziergangs wird das Tempo ruhiger. "
+            f"Das letzte Drittel ist etwa {abs(round(this_v))} % langsamer."
+        )
+    else:
+        sentence = "Das Tempo bleibt über den Spaziergang hinweg ähnlich."
+    return WalkFade(
+        this_delta_pct=round(this_v, 1),
+        prior_delta_pct=round(float(prior_d or 0.0), 1),
+        direction=direction,
+        sentence=sentence,
+    )
+
+
 def patterns_screen(db_path: Path, user_id: str) -> PatternsScreen:
     con = _con(db_path)
     try:
@@ -708,6 +874,9 @@ def patterns_screen(db_path: Path, user_id: str) -> PatternsScreen:
             monthly_deltas=_monthly_deltas(con, user_id, ref_date),
             routine=_routine(con, user_id, ref_date),
             time_outdoors=_time_outdoors(con, user_id, ref_date),
+            walking_speed=_walking_speed(con, user_id, ref_date),
+            pauses=_pause_stats(con, user_id, ref_date),
+            walk_fade=_walk_fade(con, user_id, ref_date),
         )
     finally:
         con.close()
