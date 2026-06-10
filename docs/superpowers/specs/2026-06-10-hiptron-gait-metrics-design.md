@@ -26,13 +26,13 @@ New `Scenario` fields (all default to "no signal"):
 | Field | helga | otto | margarete | ingrid |
 |---|---|---|---|---|
 | `walk_speed_mps` (base) | 1.15 | 1.1 | 1.0 | 1.25 |
-| `speed_decline_pct_per_week` / onset week | 2.5 / wk 6 | — | — | — |
+| `speed_decline_pct_per_week` / onset week | 3.5 / wk 6 | — | — | — |
 | within-walk fade (last third slower, post-onset) | ~20% | — | — | — |
 | `pauses_per_walk` (range) / dwell each | — | — | 2–4 / 20–90 s | — |
 
 Mechanics:
 
-- **Speed realization:** vary per-fix step *distance* (step interval stays `TRANSIT_STEP_S = 15`); effective speed = `walk_speed_mps × week_factor × segment_factor`. Helga's `week_factor` declines 2.5%/week from week 6 (≈ −15% by `DEMO_END`), aligned with her distance-decline onset so it reads as one coherent story.
+- **Speed realization:** keep the spatial fix spacing (`TRANSIT_STEP_M = 22`) and vary the per-fix step *time*: `step_s = TRANSIT_STEP_M / speed`, where `speed = walk_speed_mps × week_factor` (the `Scenario` default is `22/15 ≈ 1.47 m/s` — today's implicit speed — so unit-test scenarios are unaffected). Helga's `week_factor` declines 3.5%/week from week 6 (≈ −21% by `DEMO_END`); 2.5% would average to only −9.5% in the 28d-vs-28d comparison and read "flat" under the 10% threshold. Aligned with her distance-decline onset so it reads as one coherent story.
 - **Within-walk fade (helga, post-onset):** fixes in the last third of the route emitted ~20% slower → genuinely negative `speed_third_delta_pct`. This replaces the dormant `fatigue_onset_week` hook (`generator.py:243`), which slowed the whole walk uniformly and therefore never moved the third-delta (the old "symmetric signal" bug). Remove or repurpose that dead hook.
 - **Mid-walk pauses (margarete):** 2–4 stationary holds per outing at random points along the route, dwell 20–90 s each. **Hard constraint: dwell < 120 s** — stage-3 DBSCAN clusters dwells ≥ 120 s within 10 m into `places`; longer pauses would mint fake destinations. Pauses start with her outing-drop onset.
 - **RNG discipline:** all new randomness from a **separate seeded `random.Random` stream** (e.g. seeded `f"{seed}-gait"`), so the existing draw sequence (routes, distances, place visits) is bit-identical to today. Otherwise changepoint timing drifts and the 14-day amber window can silently break. `Scenario.end_dt` stays pinned to `DEMO_END`.
@@ -44,8 +44,8 @@ Side effects accepted: margarete's pause dwell adds ~2–6 min to her walk durat
 
 Three new query helpers, same conventions as `_time_outdoors()` (28d vs prior-28d, flat threshold 10%, hidden gate < 8 active days in window):
 
-- `_walking_speed()` → `WalkingSpeed`: weekly avg of `walk_features.mean_speed` (km/h, 1 decimal) for the last ~12 weeks (for the trend line) + current-28d avg, prior-28d avg, direction (`up`/`down`/`flat`).
-- `_pause_stats()` → `PauseStats`: 28d avg `pause_count` per walk (1 decimal) + avg dwell minutes per walk, prior-28d comparison, direction.
+- `_walking_speed()` → `WalkingSpeed`: weekly **moving speed** = `sum(distance_m) / sum(duration_s − dwell_s)` (km/h) for the last ~12 weeks (trend line) + current-28d vs prior-28d, direction (`up`/`down`/`flat`). NOT `mean_speed`: that column divides by full walk duration including the 10–40 min destination dwell, so it mostly measures dwell randomness, not gait. Subtracting `dwell_s` (all sub-0.3 m/s time) recovers true transit speed from existing columns.
+- `_pause_stats()` → `PauseStats`: 28d avg of `GREATEST(pause_count − 1, 0)` per walk (1 decimal), prior-28d comparison, direction. The −1 removes the destination stop: every outing's 10–40 min destination dwell registers as one pause in stage 2, so raw `pause_count` ≈ 1 for everyone. For the same reason per-pause dwell minutes are NOT separable read-side (`dwell_s` is dominated by destination dwell) — the metric reports pause *count* only; no dwell-minutes display. Direction uses an absolute gate (|this − prior| < 0.7 → flat) since the prior average is near zero and percent deltas would be unstable.
 - `_walk_fade()` → `WalkFade`: 28d avg `speed_third_delta_pct` (negative = slower at end), prior-28d, direction. Internal/API naming is `walk_fade` — "fatigue" never appears in API fields or UI.
 
 All wired into `patterns_screen()` → `PatternsScreen` model. Walks joined via `walks.start_ts` for windowing (same as existing helpers).
