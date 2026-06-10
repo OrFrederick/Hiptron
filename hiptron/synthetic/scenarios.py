@@ -23,6 +23,7 @@ class Scenario:
     mean_outing_distance_m: float
     distance_decline_pct_per_week: float = 0.0
     decline_start_week: int | None = None
+    # Dead: generator hook removed 2026-06-10; kept only for old call sites.
     fatigue_onset_week: int | None = None
     place_repertoire_shrink: bool = False
     outings_decline_start_week: int | None = None

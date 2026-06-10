@@ -185,10 +185,10 @@ def _gait_speed_mps(scenario: Scenario, week_idx: int) -> float:
 
 
 def _fade_factor(scenario: Scenario, week_idx: int) -> float:
-    """Return-leg speed multiplier (<1 = slower towards the end of the walk)."""
+    """Return-leg speed multiplier (<1 = the whole return leg is walked slower)."""
     start = scenario.speed_decline_start_week
     if scenario.walk_fade_pct > 0 and start is not None and week_idx >= start:
-        return 1.0 - scenario.walk_fade_pct / 100.0
+        return max(0.05, 1.0 - scenario.walk_fade_pct / 100.0)
     return 1.0
 
 
@@ -233,13 +233,18 @@ def _emit_outing(
 ) -> datetime:
     """Emit one outing's GPS fixes. Personas with baked street routes walk real
     OSM streets; everyone else falls back to the geometric arc model."""
+    speed = _gait_speed_mps(scenario, week_idx)
+    step_out_s = TRANSIT_STEP_M / speed
+    step_back_s = step_out_s / _fade_factor(scenario, week_idx)
     user_route = _routes().get(scenario.user_id)
     if user_route is not None and place.label in user_route.get("places", {}):
         return _emit_outing_routed(
-            rows, scenario, place, start_dt, decline_factor, rng, user_route, week_idx, gait_rng
+            rows, scenario, place, start_dt, decline_factor, rng, user_route,
+            week_idx, gait_rng, step_out_s, step_back_s,
         )
     return _emit_outing_arc(
-        rows, scenario, place, start_dt, decline_factor, rng, week_idx, gait_rng
+        rows, scenario, place, start_dt, decline_factor, rng,
+        week_idx, gait_rng, step_out_s, step_back_s,
     )
 
 
@@ -251,8 +256,10 @@ def _emit_outing_routed(
     decline_factor: float,
     rng: random.Random,
     route: dict[str, Any],
-    week_idx: int,
+    week_idx: int,  # reserved for Task 4 pause logic; threaded here unused
     gait_rng: random.Random,  # reserved for Task 4 pause draws; threaded here unused
+    step_out_s: float,
+    step_back_s: float,
 ) -> datetime:
     """Walk real streets: a near-home block-loop spur pads the distance, then the
     spine carries the user out to the snapped on-street place, dwell, and back.
@@ -270,10 +277,6 @@ def _emit_outing_routed(
         scenario.mean_outing_distance_m * decline_factor * rng.uniform(0.7, 1.3),
     )
     oneway_m = round_trip_m / 2.0
-
-    speed = _gait_speed_mps(scenario, week_idx)
-    step_out_s = TRANSIT_STEP_M / speed
-    step_back_s = step_out_s / _fade_factor(scenario, week_idx)
 
     # Pad spur: walk out along the block loop and back, so the spur starts and ends
     # at home and joins the spine seamlessly. Its length tops up the spine to oneway.
@@ -317,8 +320,10 @@ def _emit_outing_arc(
     start_dt: datetime,
     decline_factor: float,
     rng: random.Random,
-    week_idx: int,
+    week_idx: int,  # reserved for Task 4 pause logic; threaded here unused
     gait_rng: random.Random,  # reserved for Task 4 pause draws; threaded here unused
+    step_out_s: float,
+    step_back_s: float,
 ) -> datetime:
     # Work in a local metre plane centred on home: x = east, y = north.
     east_m = place.lon_offset_m
@@ -330,10 +335,6 @@ def _emit_outing_arc(
         scenario.mean_outing_distance_m * decline_factor * rng.uniform(0.7, 1.3),
     )
     oneway_m = round_trip_m / 2.0
-
-    speed = _gait_speed_mps(scenario, week_idx)
-    step_out_s = TRANSIT_STEP_M / speed
-    step_back_s = step_out_s / _fade_factor(scenario, week_idx)
 
     # Unit perpendicular to the home->place direction (for the route's bow).
     if straight_m < 1.0:

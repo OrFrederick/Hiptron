@@ -110,7 +110,7 @@ def test_walk_speed_mps_controls_transit_speed(tmp_path):
     )
     db = _gait_db(tmp_path, slow)
     v = _moving_speed_mps(db, "slowpoke")
-    # GPS jitter adds path length, so measured moving speed sits slightly above target.
+    # Jitter and dwell-boundary effects scatter the measured value around the 0.9 m/s target.
     assert 0.75 <= v <= 1.1
 
 
@@ -124,7 +124,7 @@ def test_default_speed_unchanged(tmp_path):
     # Arc-path Bezier geometry yields ~1.15 m/s measured (lower than 22/15 ≈ 1.47
     # because parameter-uniform Bezier steps are not spatially uniform at 22 m each).
     # The point is that default speed is not accidentally broken by Task 2/3.
-    assert 0.9 <= v <= 1.6
+    assert 0.9 <= v <= 1.35
 
 
 def test_speed_decline_lowers_late_weeks(tmp_path):
