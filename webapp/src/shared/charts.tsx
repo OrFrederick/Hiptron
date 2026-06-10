@@ -265,6 +265,32 @@ export function DeltaRow({ label, pct, direction }: { label: string; pct: number
   );
 }
 
+// ── Time-outdoors hero stat (warm daily reassurance, never a health number) ──
+function fmtMinutes(totalMin: number): string {
+  const m = Math.round(totalMin);
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (h && mm) return `${h} Std ${mm} Min`;
+  if (h) return `${h} Std`;
+  return `${mm} Min`;
+}
+
+export function TimeOutdoorsStat({ avgMin, direction }: { avgMin: number; direction: "up" | "down" | "flat" }) {
+  const arrow = direction === "up" ? "▲" : direction === "down" ? "▼" : "→";
+  const tint = direction === "flat" ? c.textMuted : c.blue600;
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+      <span style={{ fontSize: 30, fontWeight: 700, color: c.textDark, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>
+        {fmtMinutes(avgMin)}
+      </span>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, color: tint }}>
+        <span style={{ fontSize: 11 }}>{arrow}</span>
+        {direction === "flat" ? "etwa gleich" : "Vormonat"}
+      </span>
+    </div>
+  );
+}
+
 // ── Calm routine-consistency bar (reassurance, not a clinical dial) ──
 export function RoutineBar({ score, band }: { score: number; band: "stabil" | "wechselnd" }) {
   return (

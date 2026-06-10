@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { DeltaRow, RhythmBars, RoutineBar } from "../../src/shared/charts";
+import { DeltaRow, RhythmBars, RoutineBar, TimeOutdoorsStat } from "../../src/shared/charts";
 
 describe("new chart primitives", () => {
   it("RhythmBars renders one row per bucket with percent", () => {
@@ -27,5 +27,17 @@ describe("new chart primitives", () => {
   it("RoutineBar shows band label", () => {
     const { getByText } = render(<RoutineBar score={78} band="stabil" />);
     expect(getByText("stabil")).toBeTruthy();
+  });
+
+  it("TimeOutdoorsStat formats minutes as hours+minutes", () => {
+    const { getByText } = render(<TimeOutdoorsStat avgMin={147} direction="flat" />);
+    expect(getByText("2 Std 27 Min")).toBeTruthy();
+    expect(getByText("etwa gleich")).toBeTruthy();
+  });
+
+  it("TimeOutdoorsStat shows Vormonat label when changed", () => {
+    const { getByText } = render(<TimeOutdoorsStat avgMin={45} direction="down" />);
+    expect(getByText("45 Min")).toBeTruthy();
+    expect(getByText("Vormonat")).toBeTruthy();
   });
 });

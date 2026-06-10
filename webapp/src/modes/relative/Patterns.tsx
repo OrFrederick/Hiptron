@@ -6,7 +6,7 @@ import { personaName, usePersona } from "../../shared/persona";
 import { Shell } from "../../shared/Shell";
 import { ErrorState, LoadingState } from "../../shared/states";
 import { HIP } from "../../shared/theme";
-import { DeltaRow, RhythmBars, RoutineBar } from "../../shared/charts";
+import { DeltaRow, RhythmBars, RoutineBar, TimeOutdoorsStat } from "../../shared/charts";
 
 const c = HIP.c;
 
@@ -63,6 +63,20 @@ export default function Patterns() {
               {data.rhythm.sentence}
             </div>
             <RhythmBars buckets={data.rhythm.buckets} />
+          </Card>
+        </>
+      )}
+
+      {data.time_outdoors && (
+        <>
+          <SectionLabel>Zeit draußen</SectionLabel>
+          <Card>
+            <div style={{ marginBottom: 12 }}>
+              <TimeOutdoorsStat avgMin={data.time_outdoors.avg_min_per_day} direction={data.time_outdoors.direction} />
+            </div>
+            <div style={{ fontSize: 15, color: c.textMuted, lineHeight: 1.4 }}>
+              {data.time_outdoors.sentence}
+            </div>
           </Card>
         </>
       )}

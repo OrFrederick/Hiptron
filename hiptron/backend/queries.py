@@ -20,6 +20,7 @@ from hiptron.backend.models import (
     RhythmBucket,
     RoutineScore,
     SchematicMap,
+    TimeOutdoors,
     WalkSummary,
     WeeklyTrend,
     WeeklyTrendPoint,
@@ -342,7 +343,7 @@ ALL_CLEAR_OLDER = "Schöne, gleichmäßige Woche. Weiter so."
 
 def _recent_relative_changepoint(
     con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Return the parsed payload of the most recent relative-audience insight
     within 14 days of *ref_date*, or None if there is none."""
     row = con.execute(
@@ -458,6 +459,16 @@ _WEEKDAYS_DE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Sams
 
 def _de_num(x: float, decimals: int = 1) -> str:
     return f"{x:.{decimals}f}".replace(".", ",")
+
+
+def _fmt_minutes(total_min: float) -> str:
+    m = int(round(total_min))
+    h, mm = divmod(m, 60)
+    if h and mm:
+        return f"{h} Std {mm} Min"
+    if h:
+        return f"{h} Std"
+    return f"{mm} Min"
 
 
 def _highlights(con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date) -> list[Highlight]:
@@ -637,6 +648,52 @@ def _routine(
     return RoutineScore(score=score, band=band, sentence=sentence)
 
 
+def _time_outdoors(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> TimeOutdoors | None:
+    # Tier-1 "minutes away from home" metric (catalog: D · M). Warm daily reassurance,
+    # NOT a gait/health signal. Pure read-side over daily_features.time_outdoors_min.
+    row = con.execute(
+        """
+        SELECT
+          avg(CASE WHEN date > ? - INTERVAL 28 DAY THEN time_outdoors_min END) AS this_v,
+          avg(CASE WHEN date <= ? - INTERVAL 28 DAY
+                    AND date > ? - INTERVAL 56 DAY THEN time_outdoors_min END) AS prior_v,
+          count(CASE WHEN date > ? - INTERVAL 28 DAY THEN 1 END) AS n_this
+        FROM daily_features
+        WHERE user_id = ? AND date > ? - INTERVAL 56 DAY
+        """,
+        (ref_date, ref_date, ref_date, ref_date, user_id, ref_date),
+    ).fetchone()
+    if row is None:
+        return None
+    this_v, prior_v, n_this = row
+    # Hidden gate: thin window (< ~8 active days) → no honest average. Mirrors _rhythm.
+    if this_v is None or n_this is None or int(n_this) < 8:
+        return None
+    if prior_v and prior_v > 0:
+        pct = (float(this_v) - float(prior_v)) / float(prior_v) * 100.0
+        # <10% month-to-month is everyday noise → "etwa gleich" (matches _monthly_deltas).
+        direction: Literal["up", "down", "flat"] = (
+            "flat" if abs(pct) < 10 else ("up" if pct > 0 else "down")
+        )
+    else:
+        pct, direction = 0.0, "flat"
+    tail = {
+        "flat": "Ähnlich wie im Vormonat.",
+        "up": "Etwas mehr als im Vormonat.",
+        "down": "Etwas weniger als im Vormonat.",
+    }[direction]
+    sentence = f"Im Schnitt etwa {_fmt_minutes(this_v)} pro Tag draußen. {tail}"
+    return TimeOutdoors(
+        avg_min_per_day=float(this_v),
+        prior_avg_min=float(prior_v or 0.0),
+        pct_delta=float(pct),
+        direction=direction,
+        sentence=sentence,
+    )
+
+
 def patterns_screen(db_path: Path, user_id: str) -> PatternsScreen:
     con = _con(db_path)
     try:
@@ -650,6 +707,7 @@ def patterns_screen(db_path: Path, user_id: str) -> PatternsScreen:
             rhythm=_rhythm(con, user_id, ref_date),
             monthly_deltas=_monthly_deltas(con, user_id, ref_date),
             routine=_routine(con, user_id, ref_date),
+            time_outdoors=_time_outdoors(con, user_id, ref_date),
         )
     finally:
         con.close()

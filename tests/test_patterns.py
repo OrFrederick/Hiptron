@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from hiptron.backend.queries import patterns_screen, older_adult_home
+from hiptron.backend.queries import older_adult_home, patterns_screen
 from hiptron.db.connection import apply_schema, open_db
 from hiptron.pipeline.run import run_pipeline
 from hiptron.synthetic.generator import generate
@@ -57,3 +57,23 @@ def test_margarete_outings_down(demo_db: Path):
 def test_older_adult_home_has_highlight_field(demo_db: Path):
     h = older_adult_home(demo_db, "helga")
     assert hasattr(h, "highlight")
+
+
+def test_time_outdoors_present_and_sane(demo_db: Path):
+    # otto is out a lot (~2-3h/day) → the metric must surface and read plausibly.
+    p = patterns_screen(demo_db, "otto")
+    assert p.time_outdoors is not None
+    t = p.time_outdoors
+    assert t.avg_min_per_day > 0
+    assert 30 <= t.avg_min_per_day <= 360
+    assert t.direction in ("up", "down", "flat")
+    assert t.sentence
+
+
+def test_time_outdoors_all_personas_type(demo_db: Path):
+    # Either a valid object or a clean None (hidden gate) — never a crash, for every persona.
+    for u in ("helga", "otto", "margarete", "ingrid"):
+        t = patterns_screen(demo_db, u).time_outdoors
+        if t is not None:
+            assert 0 <= t.avg_min_per_day <= 600
+            assert t.direction in ("up", "down", "flat")

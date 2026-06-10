@@ -99,10 +99,18 @@ export interface RoutineScore {
   band: "stabil" | "wechselnd";
   sentence: string;
 }
+export interface TimeOutdoors {
+  avg_min_per_day: number;
+  prior_avg_min: number;
+  pct_delta: number;
+  direction: "up" | "down" | "flat";
+  sentence: string;
+}
 export interface PatternsScreen {
   user_id: string;
   highlights: Highlight[];
   rhythm: Rhythm | null;
   monthly_deltas: MonthlyDelta[];
   routine: RoutineScore | null;
+  time_outdoors: TimeOutdoors | null;
 }
