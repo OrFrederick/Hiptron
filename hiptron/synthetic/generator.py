@@ -192,6 +192,54 @@ def _fade_factor(scenario: Scenario, week_idx: int) -> float:
     return 1.0
 
 
+def _pause_plan(
+    scenario: Scenario, week_idx: int, n_leg_pts: int, gait_rng: random.Random
+) -> tuple[set[int], set[int]]:
+    """Pick outbound/return fix indices at which to hold. Empty when inactive."""
+    if (
+        scenario.pauses_per_walk is None
+        or scenario.pause_start_week is None
+        or week_idx < scenario.pause_start_week
+        or n_leg_pts < 8
+    ):
+        return set(), set()
+    lo, hi = scenario.pauses_per_walk
+    n = gait_rng.randint(lo, hi)
+    n_out = n // 2
+    n_back = n - n_out
+
+    def pick(k: int) -> set[int]:
+        if k <= 0:
+            return set()
+        candidates = range(2, n_leg_pts - 2)
+        return set(gait_rng.sample(candidates, min(k, len(candidates))))
+
+    return pick(n_out), pick(n_back)
+
+
+def _emit_pause(
+    rows: list[Any],
+    scenario: Scenario,
+    lat: float,
+    lon: float,
+    t: datetime,
+    gait_rng: random.Random,
+) -> datetime:
+    """Short stationary hold mid-walk. 20-90 s — hard-capped under the 120 s
+    dwell threshold of the place clusterer, so pauses never become 'places'.
+    All draws come from gait_rng (never the main rng) to keep existing
+    personas' draw sequences unchanged."""
+    hold_s = gait_rng.uniform(20.0, 90.0)
+    for _ in range(max(2, int(hold_s // DWELL_SAMPLE_S))):
+        jlat = lat + gait_rng.gauss(0, 0.5) / METERS_PER_DEG_LAT
+        jlon = lon + gait_rng.gauss(0, 0.5) / (
+            METERS_PER_DEG_LAT * math.cos(math.radians(lat))
+        )
+        rows.append((scenario.user_id, t, jlat, jlon, gait_rng.uniform(3.0, 8.0)))
+        t += timedelta(seconds=DWELL_SAMPLE_S)
+    return t
+
+
 def _places_for_week(
     scenario: Scenario, week_idx: int, rng: random.Random
 ) -> tuple[NamedPlace, ...]:
@@ -229,7 +277,7 @@ def _emit_outing(
     decline_factor: float,
     rng: random.Random,
     week_idx: int,
-    gait_rng: random.Random,  # reserved for Task 4 pause draws; threaded here unused
+    gait_rng: random.Random,
 ) -> datetime:
     """Emit one outing's GPS fixes. Personas with baked street routes walk real
     OSM streets; everyone else falls back to the geometric arc model."""
@@ -256,8 +304,8 @@ def _emit_outing_routed(
     decline_factor: float,
     rng: random.Random,
     route: dict[str, Any],
-    week_idx: int,  # reserved for Task 4 pause logic; threaded here unused
-    gait_rng: random.Random,  # reserved for Task 4 pause draws; threaded here unused
+    week_idx: int,
+    gait_rng: random.Random,
     step_out_s: float,
     step_back_s: float,
 ) -> datetime:
@@ -290,6 +338,8 @@ def _emit_outing_routed(
     outbound = spur + spine_pts
     dest = spine[-1]
 
+    pause_out, pause_back = _pause_plan(scenario, week_idx, len(outbound), gait_rng)
+
     def emit_ll(lat: float, lon: float, ts: datetime, jitter_m: float) -> None:
         jlat = lat + rng.gauss(0, jitter_m) / METERS_PER_DEG_LAT
         jlon = lon + rng.gauss(0, jitter_m) / (
@@ -298,18 +348,22 @@ def _emit_outing_routed(
         rows.append((scenario.user_id, ts, jlat, jlon, rng.uniform(3.0, 8.0)))
 
     t = start_dt
-    for lat, lon in outbound:
+    for i, (lat, lon) in enumerate(outbound):
         emit_ll(lat, lon, t, 1.5)
         t += timedelta(seconds=step_out_s)
+        if i in pause_out:
+            t = _emit_pause(rows, scenario, lat, lon, t, gait_rng)
 
     dwell_min = rng.randint(10, 40)
     for _ in range(dwell_min * 60 // DWELL_SAMPLE_S):
         emit_ll(dest[0], dest[1], t, 0.5)
         t += timedelta(seconds=DWELL_SAMPLE_S)
 
-    for lat, lon in reversed(outbound):
+    for i, (lat, lon) in enumerate(reversed(outbound)):
         emit_ll(lat, lon, t, 1.5)
         t += timedelta(seconds=step_back_s)
+        if i in pause_back:
+            t = _emit_pause(rows, scenario, lat, lon, t, gait_rng)
     return t
 
 
@@ -320,8 +374,8 @@ def _emit_outing_arc(
     start_dt: datetime,
     decline_factor: float,
     rng: random.Random,
-    week_idx: int,  # reserved for Task 4 pause logic; threaded here unused
-    gait_rng: random.Random,  # reserved for Task 4 pause draws; threaded here unused
+    week_idx: int,
+    gait_rng: random.Random,
     step_out_s: float,
     step_back_s: float,
 ) -> datetime:
@@ -368,11 +422,22 @@ def _emit_outing_arc(
     t = start_dt
     out_sign = rng.choice((-1.0, 1.0))
 
+    pause_out, pause_back = _pause_plan(scenario, week_idx, n_steps + 1, gait_rng)
+
     # Outbound leg: home -> place along a gentle curve.
     for i in range(n_steps + 1):
         x_m, y_m = curve(i / n_steps, out_sign)
         emit(x_m, y_m, t, 1.5)
         t += timedelta(seconds=step_out_s)
+        if i in pause_out:
+            t = _emit_pause(
+                rows,
+                scenario,
+                scenario.home_lat + _m_to_deg_lat(y_m),
+                scenario.home_lon + _m_to_deg_lon(x_m, scenario.home_lat),
+                t,
+                gait_rng,
+            )
 
     # Dwell at the destination: densely sampled, near-stationary, tightly clustered.
     dwell_min = rng.randint(10, 40)
@@ -385,4 +450,13 @@ def _emit_outing_arc(
         x_m, y_m = curve(1.0 - i / n_steps, -out_sign)
         emit(x_m, y_m, t, 1.5)
         t += timedelta(seconds=step_back_s)
+        if i in pause_back:
+            t = _emit_pause(
+                rows,
+                scenario,
+                scenario.home_lat + _m_to_deg_lat(y_m),
+                scenario.home_lon + _m_to_deg_lon(x_m, scenario.home_lat),
+                t,
+                gait_rng,
+            )
     return t

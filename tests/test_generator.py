@@ -208,3 +208,54 @@ def test_no_fade_keeps_third_delta_flat(tmp_path):
     finally:
         con.close()
     assert abs(float(avg_delta)) < 8.0
+
+
+def _pause_scenario(user_id: str = "pauser") -> Scenario:
+    return Scenario(
+        user_id=user_id, seed=11, weeks=4, home_lat=52.52, home_lon=13.405,
+        outings_per_day=2, mean_outing_distance_m=900.0,
+        walk_speed_mps=1.1, pauses_per_walk=(2, 4), pause_start_week=0,
+        end_dt=_GAIT_END,
+    )
+
+
+def test_pauses_raise_pause_count(tmp_path):
+    db = _gait_db(tmp_path, _pause_scenario())
+    con = open_db(db, read_only=True)
+    try:
+        avg_pauses = con.execute(
+            """
+            SELECT avg(wf.pause_count)
+            FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+            WHERE w.user_id = 'pauser'
+            """
+        ).fetchone()[0]
+    finally:
+        con.close()
+    # Destination dwell ≈ 1 pause + 2-4 mid-walk holds → average well above 2.5.
+    assert float(avg_pauses) >= 2.5
+
+
+def test_pauses_do_not_mint_places(tmp_path):
+    """Mid-walk holds are < 120 s, under the place-cluster dwell threshold —
+    the pausing persona must get the same place count as a pause-free twin."""
+    db_pause = _gait_db(tmp_path, _pause_scenario("pauser"))
+    plain_dir = tmp_path / "plain"
+    plain_dir.mkdir()
+    no_pause = Scenario(
+        user_id="walker", seed=11, weeks=4, home_lat=52.52, home_lon=13.405,
+        outings_per_day=2, mean_outing_distance_m=900.0,
+        walk_speed_mps=1.1, end_dt=_GAIT_END,
+    )
+    db_plain = _gait_db(plain_dir, no_pause)
+
+    def n_places(db, uid):
+        con = open_db(db, read_only=True)
+        try:
+            return con.execute(
+                "SELECT count(*) FROM places WHERE user_id = ?", (uid,)
+            ).fetchone()[0]
+        finally:
+            con.close()
+
+    assert n_places(db_pause, "pauser") == n_places(db_plain, "walker")
