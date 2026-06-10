@@ -51,8 +51,8 @@ export default function OlderAdultHome() {
       <HeroCard
         greeting={`${data.greeting},`}
         name={name}
-        statusText="In Ordnung"
-        tagline={evening ? "Ein ruhiger Abend — alles sieht gut aus." : "Heute schon alles im Grünen?"}
+        statusText={data.status === "amber" ? "Etwas ruhiger zur Zeit" : "In Ordnung"}
+        tagline={evening ? "Ein ruhiger Abend. Alles sieht gut aus." : "Heute schon alles im Grünen?"}
         avatar={name}
         onProfile={goProfile}
         rightSlot={
@@ -79,7 +79,7 @@ export default function OlderAdultHome() {
 
       <Card>
         <div style={{ fontSize: 18, fontWeight: 600, color: c.textDark, marginBottom: 6 }}>
-          Alles in Ordnung
+          {data.status === "amber" ? "So war deine Woche" : "Alles in Ordnung"}
         </div>
         <ChecklistRow icon="walk" tint={c.blue50} iconColor={c.blue600} label="Routine vorhanden" />
         <ChecklistRow

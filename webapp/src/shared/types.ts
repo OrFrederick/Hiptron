@@ -31,6 +31,7 @@ export interface OlderAdultHome {
   trend_card: string | null;
   week_distances: WeeklyTrend | null;
   highlight: Highlight | null;
+  status: "green" | "amber";
 }
 
 export interface WeeklyTrendPoint {

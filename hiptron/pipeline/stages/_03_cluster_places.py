@@ -3,19 +3,59 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from collections import defaultdict
 from datetime import datetime
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 import duckdb
 import numpy as np
 from sklearn.cluster import DBSCAN
 
+from hiptron.pipeline.stages._01_segment_walks import _haversine_m
+
 DWELL_MIN_S = 120
 EPS_M = 50.0
 MIN_SAMPLES = 3
 DEG_PER_M_LAT = 1 / 111_320.0
+
+# Demo personas walk baked real-street routes whose endpoints ARE the named places
+# (see hiptron/synthetic/routes.json). When a user has those, label each cluster by
+# the nearest baked destination — exact and stable — instead of guessing from the
+# dwell's time-of-day, which collides when several places share a visit hour.
+_ROUTES_PATH = Path(__file__).parents[2] / "synthetic" / "routes.json"
+_DEST_MATCH_M = 80.0
+
+
+@lru_cache(maxsize=1)
+def _baked_dests() -> dict[str, list[tuple[str, float, float]]]:
+    try:
+        routes = json.loads(_ROUTES_PATH.read_text())
+    except FileNotFoundError:
+        return {}
+    out: dict[str, list[tuple[str, float, float]]] = {}
+    for user_id, r in routes.items():
+        out[user_id] = [
+            (label, spine[-1][0], spine[-1][1]) for label, spine in r["places"].items()
+        ]
+    return out
+
+
+def _label_cluster(
+    user_id: str, centroid_lat: float, centroid_lon: float, points: list[tuple[Any, ...]]
+) -> str:
+    dests = _baked_dests().get(user_id)
+    if dests:
+        label, dist = min(
+            ((lab, _haversine_m(centroid_lat, centroid_lon, la, lo)) for lab, la, lo in dests),
+            key=lambda x: x[1],
+        )
+        if dist <= _DEST_MATCH_M:
+            return label
+    return _auto_label(points)
 
 
 def cluster_places(con: duckdb.DuckDBPyConnection) -> None:
@@ -76,7 +116,9 @@ def _cluster_user(con: duckdb.DuckDBPyConnection, user_id: str) -> None:
         first_seen = min(timestamps)
         last_seen = max(timestamps)
         place_id = _place_id(user_id, centroid_lat, centroid_lon)
-        label = _auto_label([dwell_points[i] for i in idxs])
+        label = _label_cluster(
+            user_id, centroid_lat, centroid_lon, [dwell_points[i] for i in idxs]
+        )
         place_rows.append(
             (
                 place_id,
@@ -100,8 +142,6 @@ def _cluster_user(con: duckdb.DuckDBPyConnection, user_id: str) -> None:
 
 def _dwell_segments_for_walk(walk_id: str, fixes: list[Any]) -> list[tuple[Any, ...]]:
     """Find sub-segments where the user was stationary >= DWELL_MIN_S."""
-    from hiptron.pipeline.stages._01_segment_walks import _haversine_m
-
     segments = []
     seg_start = None
     seg_start_ts = None

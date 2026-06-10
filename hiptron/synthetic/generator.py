@@ -1,7 +1,10 @@
 import datetime as dt_mod
+import json
 import math
 import random
 from datetime import datetime, timedelta
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 import duckdb
@@ -9,6 +12,55 @@ import duckdb
 from hiptron.synthetic.scenarios import DEFAULT_PLACES, NamedPlace, Scenario
 
 METERS_PER_DEG_LAT = 111_320.0
+
+_ROUTES_PATH = Path(__file__).with_name("routes.json")
+
+
+@lru_cache(maxsize=1)
+def _routes() -> dict[str, Any]:
+    """Baked real-street foot routes per demo persona (see bake_routes.py).
+
+    Loaded once and cached. Missing file -> empty map, so the generator falls
+    back to the geometric arc model for any user without baked routes (keeps the
+    unit-test scenarios, which use throwaway user ids, on the old code path)."""
+    try:
+        return json.loads(_ROUTES_PATH.read_text())
+    except FileNotFoundError:
+        return {}
+
+
+def _haversine_m(a: tuple[float, float], b: tuple[float, float]) -> float:
+    r = 6_371_000.0
+    p1, p2 = math.radians(a[0]), math.radians(b[0])
+    dp = math.radians(b[0] - a[0])
+    dl = math.radians(b[1] - a[1])
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(h))
+
+
+def _resample(poly: list[list[float]], step_m: float, max_m: float) -> list[tuple[float, float]]:
+    """Walk `poly` ([[lat,lon],...]) emitting points every ~step_m up to max_m of
+    arc length. Linearly interpolates between vertices so spacing stays uniform
+    regardless of the source vertex density."""
+    pts: list[tuple[float, float]] = [(poly[0][0], poly[0][1])]
+    if max_m <= 0 or len(poly) < 2:
+        return pts
+    target = step_m
+    walked = 0.0
+    for i in range(1, len(poly)):
+        a = (poly[i - 1][0], poly[i - 1][1])
+        b = (poly[i][0], poly[i][1])
+        seg = _haversine_m(a, b)
+        if seg <= 0:
+            continue
+        while walked + seg >= target and target <= max_m:
+            f = (target - walked) / seg
+            pts.append((a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f))
+            target += step_m
+        walked += seg
+        if walked >= max_m:
+            break
+    return pts
 
 # Transit fixes are spaced wide enough (> the 10 m dwell threshold in the place
 # clusterer) that the moving leg is never mistaken for a stop; the standing-still
@@ -146,6 +198,87 @@ def _pick_place(
 
 
 def _emit_outing(
+    rows: list[Any],
+    scenario: Scenario,
+    place: NamedPlace,
+    start_dt: datetime,
+    decline_factor: float,
+    rng: random.Random,
+) -> datetime:
+    """Emit one outing's GPS fixes. Personas with baked street routes walk real
+    OSM streets; everyone else falls back to the geometric arc model."""
+    user_route = _routes().get(scenario.user_id)
+    if user_route is not None and place.label in user_route.get("places", {}):
+        return _emit_outing_routed(rows, scenario, place, start_dt, decline_factor, rng, user_route)
+    return _emit_outing_arc(rows, scenario, place, start_dt, decline_factor, rng)
+
+
+def _emit_outing_routed(
+    rows: list[Any],
+    scenario: Scenario,
+    place: NamedPlace,
+    start_dt: datetime,
+    decline_factor: float,
+    rng: random.Random,
+    route: dict[str, Any],
+) -> datetime:
+    """Walk real streets: a near-home block-loop spur pads the distance, then the
+    spine carries the user out to the snapped on-street place, dwell, and back.
+
+    The dwell sits at the fixed spine endpoint regardless of distance/decline, so
+    the place clusters tightly and its pin stays put; distance and its weekly
+    decline come from how much of the loop spur gets walked, not from moving the
+    destination — keeping the activity radius small while the path length is large."""
+    spine = [(p[0], p[1]) for p in route["places"][place.label]]
+    loop = route["loop"]
+    spine_len = sum(_haversine_m(spine[i - 1], spine[i]) for i in range(1, len(spine)))
+
+    round_trip_m = max(
+        120.0,
+        scenario.mean_outing_distance_m * decline_factor * rng.uniform(0.7, 1.3),
+    )
+    oneway_m = round_trip_m / 2.0
+
+    step_s = TRANSIT_STEP_S
+    if scenario.fatigue_onset_week is not None:
+        step_s = int(TRANSIT_STEP_S / 0.9)
+
+    # Pad spur: walk out along the block loop and back, so the spur starts and ends
+    # at home and joins the spine seamlessly. Its length tops up the spine to oneway.
+    pad_oneway = max(0.0, oneway_m - spine_len)
+    spur_out = _resample(loop, TRANSIT_STEP_M, pad_oneway / 2.0)
+    spur = spur_out + list(reversed(spur_out))
+    spine_pts = _resample(spine, TRANSIT_STEP_M, spine_len)
+    if spine_pts[-1] != spine[-1]:
+        spine_pts.append(spine[-1])  # land exactly on the snapped destination
+
+    outbound = spur + spine_pts
+    dest = spine[-1]
+
+    def emit_ll(lat: float, lon: float, ts: datetime, jitter_m: float) -> None:
+        jlat = lat + rng.gauss(0, jitter_m) / METERS_PER_DEG_LAT
+        jlon = lon + rng.gauss(0, jitter_m) / (
+            METERS_PER_DEG_LAT * math.cos(math.radians(lat))
+        )
+        rows.append((scenario.user_id, ts, jlat, jlon, rng.uniform(3.0, 8.0)))
+
+    t = start_dt
+    for lat, lon in outbound:
+        emit_ll(lat, lon, t, 1.5)
+        t += timedelta(seconds=step_s)
+
+    dwell_min = rng.randint(10, 40)
+    for _ in range(dwell_min * 60 // DWELL_SAMPLE_S):
+        emit_ll(dest[0], dest[1], t, 0.5)
+        t += timedelta(seconds=DWELL_SAMPLE_S)
+
+    for lat, lon in reversed(outbound):
+        emit_ll(lat, lon, t, 1.5)
+        t += timedelta(seconds=step_s)
+    return t
+
+
+def _emit_outing_arc(
     rows: list[Any],
     scenario: Scenario,
     place: NamedPlace,

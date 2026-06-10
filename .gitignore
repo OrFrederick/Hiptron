@@ -24,3 +24,6 @@ data/*.duckdb.wal
 
 # Superpowers scratch
 .superpowers/
+
+# Playwright MCP scratch
+.playwright-mcp/

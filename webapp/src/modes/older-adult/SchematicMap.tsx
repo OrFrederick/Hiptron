@@ -1,5 +1,8 @@
+import { useState } from "react";
+
 import { Card } from "../../shared/kit";
 import { LeafletMap } from "../../shared/LeafletMap";
+import { MapModal } from "../../shared/MapModal";
 import type {
   Place,
   SchematicMap as SchematicMapType,
@@ -38,26 +41,55 @@ function dedupePlaces(places: Place[]): Place[] {
 }
 
 export function SchematicMap({ map, onClick }: Props) {
+  const [modalOpen, setModalOpen] = useState(false);
+
   return (
-    <Card ariaLabel="Wochenkarte" onClick={onClick} style={{ padding: 12 }}>
-      <p
-        style={{
-          fontSize: 13,
-          fontWeight: 600,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          color: "#525C6B",
-          margin: "2px 4px 10px",
-        }}
-      >
-        Deine Karte
-      </p>
-      <LeafletMap map={map} height={220} />
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 6px 2px" }}>
-        <span style={{ fontSize: 13.5, color: "#525C6B" }}>Tippen für deine Woche</span>
-        <span style={{ fontSize: 13.5, color: "#525C6B" }}>›</span>
-      </div>
-    </Card>
+    <>
+      <Card ariaLabel="Wochenkarte" style={{ padding: 12 }}>
+        <p
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "#525C6B",
+            margin: "2px 4px 10px",
+          }}
+        >
+          Deine Karte
+        </p>
+        {/* Map area — tapping opens the full-screen overlay */}
+        <div
+          role="button"
+          aria-label="Karte vergrößern"
+          tabIndex={0}
+          onClick={() => setModalOpen(true)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setModalOpen(true); }}
+          style={{ cursor: "pointer", borderRadius: 16, overflow: "hidden" }}
+        >
+          <LeafletMap map={map} height={220} />
+        </div>
+        {/* Navigation row — tapping goes to the week view */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={onClick}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick?.(); }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 6px 2px", cursor: onClick ? "pointer" : "default", minHeight: 44 }}
+        >
+          <span style={{ fontSize: 15, color: "#525C6B" }}>Deine Woche ansehen</span>
+          <span style={{ fontSize: 15, color: "#525C6B" }}>›</span>
+        </div>
+      </Card>
+
+      {modalOpen && (
+        <MapModal
+          map={map}
+          title="Deine Karte"
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+    </>
   );
 }
 

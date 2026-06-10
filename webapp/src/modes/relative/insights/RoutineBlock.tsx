@@ -21,9 +21,17 @@ export function RoutineBlock({ block }: { block: InsightBlockData }) {
     <InsightBlock question={block.question} verdict={block.verdict}>
       <div style={{ height: 160 }}>
         <ResponsiveContainer>
-          <LineChart data={data}>
+          <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <XAxis dataKey="date" tick={{ fill: "#6B7686", fontSize: 12 }} />
-            <YAxis hide />
+            <YAxis
+              width={56}
+              tick={{ fill: "#6B7686", fontSize: 12 }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => `${Math.round(v)} m`}
+              tickCount={4}
+              domain={[0, (dataMax: number) => Math.max(100, Math.ceil(dataMax / 100) * 100)]}
+            />
             <Line dataKey="value" stroke="#1F5FE0" strokeWidth={3} dot={false} isAnimationActive={false} />
             <ReferenceLine y={baseline} stroke="#6B7686" strokeDasharray="3 3" />
           </LineChart>

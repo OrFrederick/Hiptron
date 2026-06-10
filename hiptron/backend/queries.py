@@ -83,14 +83,7 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
                 distance_m=distance,
                 place_labels=place_labels,
             )
-            polyline = con.execute(
-                """
-                SELECT lat, lon FROM gps_fixes
-                WHERE user_id = ? AND ts BETWEEN ? AND ?
-                ORDER BY ts
-                """,
-                (user_id, start_ts, end_ts),
-            ).fetchall()
+            polyline = _walk_polyline(con, user_id, start_ts, end_ts)
             home = con.execute(
                 "SELECT median(lat), median(lon) FROM gps_fixes WHERE user_id = ?",
                 (user_id,),
@@ -111,6 +104,8 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
             "SELECT max(date) FROM daily_features WHERE user_id = ?", (user_id,)
         ).fetchone()
         ref_date = ref_row[0] if ref_row and ref_row[0] else dt.date.today()
+        cp = _recent_relative_changepoint(con, user_id, ref_date)
+        oa_status: Literal["green", "amber"] = "amber" if cp else "green"
         return OlderAdultHome(
             greeting=_greeting_de(),
             date=today,
@@ -121,6 +116,7 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
             trend_card=trend,
             week_distances=_weekly_distance(con, user_id),
             highlight=_highlight(con, user_id, ref_date),
+            status=oa_status,
         )
     finally:
         con.close()
@@ -163,6 +159,28 @@ def _weekly_distance(
 
 _SCHEMATIC_MAX_PLACES = 5
 _SCHEMATIC_HOME_RADIUS_M = 60.0
+
+# The walk segmenter only counts fixes outside its 50 m home radius, so a walk's
+# start_ts/end_ts exclude the doorstep leg. Pad the fix query so the drawn route
+# reaches the home pin instead of floating ~50-70 m away. Outings are spaced
+# >= 15 min apart, so 2 min never bleeds into a neighbouring walk.
+_POLYLINE_PAD = dt.timedelta(minutes=2)
+
+
+def _walk_polyline(
+    con: duckdb.DuckDBPyConnection,
+    user_id: str,
+    start_ts: dt.datetime,
+    end_ts: dt.datetime,
+) -> list[tuple[float, float]]:
+    return con.execute(
+        """
+        SELECT lat, lon FROM gps_fixes
+        WHERE user_id = ? AND ts BETWEEN ? AND ?
+        ORDER BY ts
+        """,
+        (user_id, start_ts - _POLYLINE_PAD, end_ts + _POLYLINE_PAD),
+    ).fetchall()
 
 
 def _top_places(
@@ -243,14 +261,7 @@ def _schematic_from_latest_walk(
     if row is None:
         return None
     _walk_id, start_ts, end_ts = row
-    polyline = con.execute(
-        """
-        SELECT lat, lon FROM gps_fixes
-        WHERE user_id = ? AND ts BETWEEN ? AND ?
-        ORDER BY ts
-        """,
-        (user_id, start_ts, end_ts),
-    ).fetchall()
+    polyline = _walk_polyline(con, user_id, start_ts, end_ts)
     home_lat, home_lon = _home_latlon(con, user_id)
     places = _top_places(con, user_id, home_lat, home_lon)
     return SchematicMap(
@@ -329,6 +340,23 @@ def _streak_days(con: duckdb.DuckDBPyConnection, user_id: str) -> int:
 ALL_CLEAR_OLDER = "Schöne, gleichmäßige Woche. Weiter so."
 
 
+def _recent_relative_changepoint(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> dict | None:
+    """Return the parsed payload of the most recent relative-audience insight
+    within 14 days of *ref_date*, or None if there is none."""
+    row = con.execute(
+        """
+        SELECT payload_json FROM insights
+        WHERE user_id = ? AND audience = 'relative'
+          AND created_ts >= ? - INTERVAL 14 DAY
+        ORDER BY created_ts DESC LIMIT 1
+        """,
+        (user_id, dt.datetime.combine(ref_date, dt.time(0, 0))),
+    ).fetchone()
+    return json.loads(row[0]) if row else None
+
+
 def _latest_older_adult_trend_text(con: duckdb.DuckDBPyConnection, user_id: str) -> str:
     row = con.execute(
         """
@@ -354,19 +382,10 @@ def relative_home(db_path: Path, user_id: str) -> RelativeHome:
 
         weekly = _weekly_distance(con, user_id)
 
-        latest_cp = con.execute(
-            """
-            SELECT payload_json FROM insights
-            WHERE user_id = ? AND audience = 'relative'
-              AND created_ts >= ? - INTERVAL 14 DAY
-            ORDER BY created_ts DESC LIMIT 1
-            """,
-            (user_id, dt.datetime.combine(ref_date, dt.time(0, 0))),
-        ).fetchone()
+        payload = _recent_relative_changepoint(con, user_id, ref_date)
         worth = None
         status: Literal["green", "amber"] = "green"
-        if latest_cp:
-            payload = json.loads(latest_cp[0])
+        if payload:
             status = "amber"
             worth = WorthNoticing(
                 headline=payload["text"],
@@ -613,7 +632,7 @@ def _routine(
     sentence = (
         "Geht meist zu ähnlichen Zeiten und an vertraute Orte."
         if band == "stabil"
-        else "Geht zu wechselnden Zeiten und Orten — abwechslungsreich."
+        else "Geht zu wechselnden Zeiten und Orten. Abwechslungsreich."
     )
     return RoutineScore(score=score, band=band, sentence=sentence)
 

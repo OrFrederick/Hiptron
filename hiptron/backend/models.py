@@ -50,6 +50,7 @@ class OlderAdultHome(BaseModel):
     trend_card: str | None
     week_distances: WeeklyTrend | None = None
     highlight: Highlight | None = None
+    status: Literal["green", "amber"] = "green"
 
 
 class WorthNoticing(BaseModel):

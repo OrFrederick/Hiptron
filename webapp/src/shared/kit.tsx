@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useState,
   type CSSProperties,
   type ReactNode,
 } from "react";
@@ -7,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 
 import { Ic } from "./Icon";
 import { LeafletMap } from "./LeafletMap";
+import { MapModal } from "./MapModal";
 import { usePersona } from "./persona";
 import { HIP, type IconName } from "./theme";
 import type { SchematicMap } from "./types";
@@ -380,27 +382,57 @@ export function MapCard({
   map,
   avatar = "H",
   callout = "Unterwegs",
+  mapTitle = "Karte",
   onClick,
 }: {
   map: SchematicMap;
   avatar?: string;
   callout?: string;
+  mapTitle?: string;
   onClick?: () => void;
 }) {
+  const [modalOpen, setModalOpen] = useState(false);
+
   return (
-    <Card style={{ padding: 8, overflow: "hidden", cursor: onClick ? "pointer" : "default" }} ariaLabel="Karte der heutigen Runde" onClick={onClick}>
-      <div style={{ borderRadius: 18, overflow: "hidden", position: "relative", isolation: "isolate" }}>
-        <LeafletMap map={map} height={210} lastSeenInitial={avatar} />
-        <div style={{ position: "absolute", left: 12, bottom: 12, zIndex: 2, background: c.white, borderRadius: HIP.radius.pill, padding: "7px 13px", boxShadow: HIP.shadow.soft, display: "inline-flex", alignItems: "center", gap: 7 }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.green500, flexShrink: 0 }} />
-          <span style={{ fontSize: 13.5, fontWeight: 600, color: c.textDark }}>{callout}</span>
+    <>
+      <Card style={{ padding: 8, overflow: "hidden" }} ariaLabel="Karte der heutigen Runde">
+        {/* Map area — tapping opens the full-screen overlay */}
+        <div
+          role="button"
+          aria-label="Karte vergrößern"
+          tabIndex={0}
+          onClick={() => setModalOpen(true)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setModalOpen(true); }}
+          style={{ borderRadius: 18, overflow: "hidden", position: "relative", isolation: "isolate", cursor: "pointer" }}
+        >
+          <LeafletMap map={map} height={210} lastSeenInitial={avatar} />
+          <div style={{ position: "absolute", left: 12, bottom: 12, zIndex: 2, background: c.white, borderRadius: HIP.radius.pill, padding: "7px 13px", boxShadow: HIP.shadow.soft, display: "inline-flex", alignItems: "center", gap: 7 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.green500, flexShrink: 0 }} />
+            <span style={{ fontSize: 13.5, fontWeight: 600, color: c.textDark }}>{callout}</span>
+          </div>
         </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 10px 6px" }}>
-        <div style={{ fontSize: 13.5, color: c.textMuted }}>Ungefähre Route · zuletzt gesehen</div>
-        <Ic name="chevron" size={18} color={c.textMuted} sw={2} />
-      </div>
-    </Card>
+        {/* Caption row — tapping navigates to detail (old onClick behaviour) */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={onClick}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick?.(); }}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 10px 6px", cursor: onClick ? "pointer" : "default" }}
+        >
+          <div style={{ fontSize: 13.5, color: c.textMuted }}>Letzte Route · zuletzt gesehen</div>
+          <Ic name="chevron" size={18} color={c.textMuted} sw={2} />
+        </div>
+      </Card>
+
+      {modalOpen && (
+        <MapModal
+          map={map}
+          title={mapTitle}
+          lastSeenInitial={avatar}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+    </>
   );
 }
 

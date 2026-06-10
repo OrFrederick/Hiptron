@@ -12,7 +12,7 @@ import duckdb
 TEMPLATES: dict[tuple[str, str, str], tuple[str, str]] = {
     ("total_distance_m", "down", "older_adult"): (
         "distance_down_older",
-        "Diese Woche etwas ruhiger unterwegs — alles in Ordnung.",
+        "Diese Woche etwas ruhiger unterwegs. Alles in Ordnung.",
     ),
     ("total_distance_m", "down", "relative"): (
         "distance_down_relative",
@@ -28,7 +28,7 @@ TEMPLATES: dict[tuple[str, str, str], tuple[str, str]] = {
     ),
     ("n_outings", "down", "older_adult"): (
         "outings_down_older",
-        "Diese Woche etwas weniger draußen — ganz nach Gefühl.",
+        "Diese Woche etwas weniger draußen. Ganz nach Gefühl.",
     ),
     ("n_outings", "down", "relative"): (
         "outings_down_relative",

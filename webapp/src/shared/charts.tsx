@@ -6,6 +6,26 @@ import { HIP } from "./theme";
 
 const c = HIP.c;
 
+// Format a distance value (km) for the y-axis tick labels with German comma.
+function axisLabel(kmVal: number): string {
+  if (kmVal >= 1) {
+    const s = Number.isInteger(kmVal)
+      ? String(kmVal)
+      : kmVal.toFixed(1).replace(".", ",");
+    return `${s} km`;
+  }
+  return `${Math.round(kmVal * 1000)} m`;
+}
+
+// Half-steps whose label AND double both read clean ("250 m", "1,5 km", "3 km").
+const NICE_HALF_STEPS = [0.1, 0.2, 0.25, 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10];
+
+// Snap the axis top to 2× a nice step so the half and max ticks are clean values.
+function niceAxisMax(rawMax: number): number {
+  const step = NICE_HALF_STEPS.find((s) => 2 * s >= rawMax);
+  return step !== undefined ? 2 * step : 2 * Math.ceil(rawMax / 2);
+}
+
 // ── Vertical day bars with a dashed baseline (senior week distance) ──
 export function WeekBars({
   data,
@@ -21,11 +41,21 @@ export function WeekBars({
   big?: boolean;
 }) {
   const col = c.blue600;
-  const maxVal = Math.max(...data, baseline, 0.001) * 1.18;
+  const maxVal = niceAxisMax(Math.max(...data, baseline, 0.001) * 1.05);
   const H = big ? 176 : 138;
   const padB = big ? 32 : 26;
   const area = H - padB;
   const barW = big ? 30 : 24;
+
+  // Y-axis: 0, half, max tick positions (bottom-up, same coord system as bars)
+  const axisW = big ? 44 : 38;
+  const tickFontSize = big ? 13 : 11;
+  const ticks: { label: string; bottomPx: number }[] = [
+    { label: "0", bottomPx: padB },
+    { label: axisLabel(maxVal / 2), bottomPx: padB + area * 0.5 },
+    { label: axisLabel(maxVal), bottomPx: padB + area },
+  ];
+
   return (
     <div>
       <div
@@ -36,60 +66,103 @@ export function WeekBars({
           boxSizing: "border-box",
           display: "flex",
           alignItems: "flex-end",
-          justifyContent: "space-between",
-          paddingBottom: padB,
         }}
       >
+        {/* Y-axis column */}
         <div
           style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: padB + (baseline / maxVal) * area,
-            borderTop: `1.5px dashed ${c.textMuted}`,
-            opacity: 0.5,
-            pointerEvents: "none",
+            width: axisW,
+            flexShrink: 0,
+            height: "100%",
+            position: "relative",
           }}
-        />
-        {data.map((v, i) => {
-          const isToday = i === data.length - 1;
-          const h = Math.max(4, (v / maxVal) * area);
-          return (
+        >
+          {ticks.map((t) => (
             <div
-              key={i}
+              key={t.label}
               style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: big ? 10 : 8,
-                height: "100%",
-                justifyContent: "flex-end",
+                position: "absolute",
+                bottom: t.bottomPx,
+                right: 6,
+                transform: "translateY(50%)",
+                fontSize: tickFontSize,
+                color: c.textMuted,
+                fontWeight: 400,
+                fontVariantNumeric: "tabular-nums",
+                lineHeight: 1,
+                whiteSpace: "nowrap",
               }}
             >
+              {t.label}
+            </div>
+          ))}
+        </div>
+
+        {/* Bars area — flex row, same relative positioning as before */}
+        <div
+          style={{
+            flex: 1,
+            height: "100%",
+            position: "relative",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            paddingBottom: padB,
+          }}
+        >
+          {/* Dashed baseline — spans bars area only */}
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: padB + (baseline / maxVal) * area,
+              borderTop: `1.5px dashed ${c.textMuted}`,
+              opacity: 0.5,
+              pointerEvents: "none",
+            }}
+          />
+
+          {data.map((v, i) => {
+            const isToday = i === data.length - 1;
+            const h = Math.max(4, (v / maxVal) * area);
+            return (
               <div
+                key={i}
                 style={{
-                  width: barW,
-                  height: h,
-                  borderRadius: 8,
-                  background: col,
-                  opacity: v === 0 ? 0.16 : isToday ? 1 : 0.42,
-                }}
-              />
-              <div
-                style={{
-                  fontSize: big ? 15 : 12.5,
-                  color: isToday ? c.textDark : c.textMuted,
-                  fontWeight: isToday ? 700 : 500,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: big ? 10 : 8,
+                  height: "100%",
+                  justifyContent: "flex-end",
                 }}
               >
-                {days[i]}
+                <div
+                  style={{
+                    width: barW,
+                    height: h,
+                    borderRadius: 8,
+                    background: col,
+                    opacity: v === 0 ? 0.16 : isToday ? 1 : 0.42,
+                  }}
+                />
+                <div
+                  style={{
+                    fontSize: big ? 15 : 12.5,
+                    color: isToday ? c.textDark : c.textMuted,
+                    fontWeight: isToday ? 700 : 500,
+                  }}
+                >
+                  {days[i]}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
       {baselineLabel && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: big ? 14 : 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: big ? 14 : 12, paddingLeft: axisW }}>
           <span style={{ width: 22, borderTop: `1.5px dashed ${c.textMuted}`, opacity: 0.7, flexShrink: 0 }} />
           <span style={{ fontSize: big ? 13.5 : 12.5, color: c.textMuted, fontWeight: 500 }}>{baselineLabel}</span>
         </div>

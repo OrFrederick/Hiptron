@@ -140,7 +140,7 @@ function ModeChooser() {
         </div>
         <div style={{ fontSize: 36, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 22 }}>Hiptron</div>
         <div style={{ fontSize: 16.5, color: c.textMuted, marginTop: 10, textAlign: "center", lineHeight: 1.5, maxWidth: 270 }}>
-          Ein ruhiges Auge auf den Alltag — in Verbindung, ohne Überwachung.
+          Ein ruhiges Auge auf den Alltag. In Verbindung, ohne Überwachung.
         </div>
 
         <div style={{ width: "100%", marginTop: 38, display: "flex", flexDirection: "column", gap: 14 }}>

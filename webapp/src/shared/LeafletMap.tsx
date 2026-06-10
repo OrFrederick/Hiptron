@@ -38,17 +38,23 @@ function mergeByLabel(places: Place[]): Place[] {
   return [...best.values()];
 }
 
-function placeIcon(label: string): L.DivIcon {
+function placeIcon(label: string, flip = false): L.DivIcon {
   const color = LABEL_COLOR[label] ?? "#1F5FE0";
   const text = labelDe(label);
+  const html = flip
+    ? `<div style="display:flex;flex-direction:column;align-items:center;transform:translateY(-50%)">
+      <span style="margin-bottom:3px;font:600 12.5px/1 -apple-system,system-ui,sans-serif;color:#1A2230;white-space:nowrap;text-shadow:0 1px 2px #fff,0 0 3px #fff,0 0 3px #fff">${text}</span>
+      <span style="width:18px;height:18px;border-radius:50%;background:${color};border:2.5px solid #fff;box-shadow:0 1px 4px rgba(16,32,60,.35)"></span>
+    </div>`
+    : `<div style="display:flex;flex-direction:column;align-items:center;transform:translateY(-50%)">
+      <span style="width:18px;height:18px;border-radius:50%;background:${color};border:2.5px solid #fff;box-shadow:0 1px 4px rgba(16,32,60,.35)"></span>
+      <span style="margin-top:3px;font:600 12.5px/1 -apple-system,system-ui,sans-serif;color:#1A2230;white-space:nowrap;text-shadow:0 1px 2px #fff,0 0 3px #fff,0 0 3px #fff">${text}</span>
+    </div>`;
   return L.divIcon({
     className: "hip-pin",
-    html: `<div style="display:flex;flex-direction:column;align-items:center;transform:translateY(-50%)">
-      <span style="width:16px;height:16px;border-radius:50%;background:${color};border:2.5px solid #fff;box-shadow:0 1px 4px rgba(16,32,60,.35)"></span>
-      <span style="margin-top:3px;font:600 11.5px/1 -apple-system,system-ui,sans-serif;color:#1A2230;white-space:nowrap;text-shadow:0 1px 2px #fff,0 0 3px #fff,0 0 3px #fff">${text}</span>
-    </div>`,
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
+    html,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
   });
 }
 
@@ -80,7 +86,7 @@ function lastSeenIcon(initial: string): L.DivIcon {
 
 interface Props {
   map: SchematicMap;
-  height?: number;
+  height?: number | string;
   interactive?: boolean;
   // Show a "last seen" avatar marker at the end of the route (relative view).
   lastSeenInitial?: string;
@@ -99,6 +105,9 @@ export function LeafletMap({ map, height = 210, interactive = false, lastSeenIni
     let m: L.Map | null = null;
     try {
       m = L.map(el, {
+        // Fractional zoom so fitBounds can spread tightly clustered pins
+        // instead of snapping a whole level out (labels collide at z15).
+        zoomSnap: 0.25,
         zoomControl: interactive,
         dragging: interactive,
         scrollWheelZoom: false,
@@ -129,20 +138,22 @@ export function LeafletMap({ map, height = 210, interactive = false, lastSeenIni
       if (line.length > 1) {
         L.polyline(line, {
           color: "#1F5FE0",
-          weight: 4,
-          opacity: 0.9,
+          weight: 5,
+          opacity: 1,
           lineJoin: "round",
           lineCap: "round",
         }).addTo(m);
       }
 
-      for (const p of places) {
+      // Sort by latitude so neighbouring pins get alternating label sides.
+      const sortedPlaces = [...places].sort((a, b) => b.centroid_lat - a.centroid_lat);
+      sortedPlaces.forEach((p, i) => {
         L.marker([p.centroid_lat, p.centroid_lon], {
-          icon: placeIcon(p.label),
+          icon: placeIcon(p.label, i % 2 === 1),
           interactive: false,
           keyboard: false,
-        }).addTo(m);
-      }
+        }).addTo(m!);
+      });
 
       L.marker([map.home_lat, map.home_lon], {
         icon: homeIcon(),
@@ -166,7 +177,7 @@ export function LeafletMap({ map, height = 210, interactive = false, lastSeenIni
       ];
       const bounds = L.latLngBounds(pts);
       if (bounds.isValid()) {
-        m.fitBounds(bounds, { padding: [34, 34], maxZoom: 16 });
+        m.fitBounds(bounds, { padding: [26, 26], maxZoom: 16 });
       } else {
         m.setView([map.home_lat, map.home_lon], 15);
       }

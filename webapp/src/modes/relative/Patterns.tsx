@@ -72,7 +72,7 @@ export default function Patterns() {
           <SectionLabel>Verglichen mit letztem Monat</SectionLabel>
           <Card>
             <div style={{ fontSize: 15, color: c.textMuted, marginBottom: 12, lineHeight: 1.4 }}>
-              Zahlen können von Monat zu Monat schwanken — das ist ganz normal.
+              Zahlen können von Monat zu Monat schwanken. Das ist ganz normal.
             </div>
             <div style={{ margin: "0 -4px" }}>
               {data.monthly_deltas.map((d) => (

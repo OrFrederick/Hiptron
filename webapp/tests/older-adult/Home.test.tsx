@@ -24,6 +24,7 @@ const fakeHome = {
   streak_days: 5,
   family_note: "Anna hat ein Herz für deinen gestrigen Spaziergang gesendet",
   trend_card: null,
+  status: "green" as const,
 };
 
 function renderHome() {
@@ -55,5 +56,20 @@ describe("Older-Adult Home", () => {
     // Streak checklist row "N Tage in Folge draußen"
     expect(screen.getByText(/5 Tage in Folge/i)).toBeInTheDocument();
     expect(screen.getByText(/Anna hat ein Herz/i)).toBeInTheDocument();
+  });
+
+  it("amber status renders calm non-alarming text", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ ...fakeHome, status: "amber" }),
+      }),
+    );
+    renderHome();
+    await waitFor(() =>
+      expect(screen.getByText(/Etwas ruhiger zur Zeit/i)).toBeInTheDocument(),
+    );
+    expect(screen.getByText(/So war deine Woche/i)).toBeInTheDocument();
   });
 });

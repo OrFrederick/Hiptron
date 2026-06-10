@@ -44,7 +44,7 @@ export default function OlderAdultWeekView() {
       <Card style={{ padding: 22 }}>
         <div style={{ fontSize: 23, fontWeight: 700, letterSpacing: "-0.01em", color: c.textDark }}>Deine Woche</div>
         <div style={{ fontSize: 18, color: c.textMuted, lineHeight: 1.5, marginTop: 8, marginBottom: 22 }}>
-          Jeder Balken ist ein Tag — wie weit du unterwegs warst.
+          Jeder Balken ist ein Tag. Wie weit du unterwegs warst.
         </div>
         {week && week.points.length > 0 ? (
           <WeekBars
@@ -64,7 +64,7 @@ export default function OlderAdultWeekView() {
           <NavyLabel style={{ marginTop: 4 }}>Wo du warst</NavyLabel>
           <Card style={{ padding: 22 }}>
             <div style={{ fontSize: 18, color: c.textMuted, lineHeight: 1.5, marginBottom: 20 }}>
-              Deine liebsten Orte — wie oft du dort vorbeischaust.
+              Deine liebsten Orte, wie oft du dort vorbeischaust.
             </div>
             <PlaceBars big frequency places={places} />
           </Card>
