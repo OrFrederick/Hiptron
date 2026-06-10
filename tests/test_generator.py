@@ -2,6 +2,8 @@
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 from hiptron.db.connection import apply_schema, open_db
 from hiptron.pipeline.run import run_pipeline
 from hiptron.synthetic.generator import _outings_for_week, _places_for_week, generate
@@ -219,35 +221,45 @@ def _pause_scenario(user_id: str = "pauser") -> Scenario:
     )
 
 
-def test_pauses_raise_pause_count(tmp_path):
-    db = _gait_db(tmp_path, _pause_scenario())
-    con = open_db(db, read_only=True)
-    try:
-        avg_pauses = con.execute(
-            """
-            SELECT avg(wf.pause_count)
-            FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
-            WHERE w.user_id = 'pauser'
-            """
-        ).fetchone()[0]
-    finally:
-        con.close()
-    # Destination dwell ≈ 1 pause + 2-4 mid-walk holds → average well above 2.5.
-    assert float(avg_pauses) >= 2.5
-
-
-def test_pauses_do_not_mint_places(tmp_path):
-    """Mid-walk holds are < 120 s, under the place-cluster dwell threshold —
-    the pausing persona must get the same place count as a pause-free twin."""
-    db_pause = _gait_db(tmp_path, _pause_scenario("pauser"))
-    plain_dir = tmp_path / "plain"
-    plain_dir.mkdir()
+@pytest.fixture(scope="module")
+def pause_twin_dbs(tmp_path_factory):
+    """Twin DBs differing only in pauses_per_walk: same seed/route geometry."""
+    db_pause = _gait_db(tmp_path_factory.mktemp("pause"), _pause_scenario("pauser"))
     no_pause = Scenario(
         user_id="walker", seed=11, weeks=4, home_lat=52.52, home_lon=13.405,
         outings_per_day=2, mean_outing_distance_m=900.0,
         walk_speed_mps=1.1, end_dt=_GAIT_END,
     )
-    db_plain = _gait_db(plain_dir, no_pause)
+    db_plain = _gait_db(tmp_path_factory.mktemp("plain"), no_pause)
+    return db_pause, db_plain
+
+
+def test_pauses_raise_pause_count(pause_twin_dbs):
+    db_pause, db_plain = pause_twin_dbs
+
+    def avg_pauses(db, uid):
+        con = open_db(db, read_only=True)
+        try:
+            return float(con.execute(
+                """
+                SELECT avg(wf.pause_count)
+                FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+                WHERE w.user_id = ?
+                """,
+                (uid,),
+            ).fetchone()[0])
+        finally:
+            con.close()
+
+    # Same seed/route geometry — only difference is pauses_per_walk=(2,4),
+    # so the pausing twin must average ≥1.5 more pauses per walk.
+    assert avg_pauses(db_pause, "pauser") >= avg_pauses(db_plain, "walker") + 1.5
+
+
+def test_pauses_do_not_mint_places(pause_twin_dbs):
+    """Mid-walk holds are < 120 s, under the place-cluster dwell threshold —
+    the pausing persona must get the same place count as a pause-free twin."""
+    db_pause, db_plain = pause_twin_dbs
 
     def n_places(db, uid):
         con = open_db(db, read_only=True)
