@@ -75,7 +75,12 @@ export default function RelativeHome() {
 
       <WeeklyTrendCard trend={data.weekly_trend} />
 
-      {data.worth_noticing && <WorthNoticingCard item={data.worth_noticing} />}
+      {data.worth_noticing && (
+        <WorthNoticingCard
+          item={data.worth_noticing}
+          onDetails={() => navigate(`/relative/insights?u=${userId}`)}
+        />
+      )}
 
       {outings.length > 0 && (
         <>

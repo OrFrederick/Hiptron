@@ -35,7 +35,16 @@ export function WeeklyTrendCard({ trend }: Props) {
               tickLine={false}
               tickFormatter={(v) => `${(v / 1000).toFixed(1).replace(".", ",")} km`}
               tickCount={4}
-              domain={[0, (dataMax: number) => Math.max(300, Math.ceil(dataMax / 300) * 300)]}
+              domain={[
+                0,
+                // Domain must cover the baseline too, or recharts silently
+                // clips the dashed ReferenceLine the caption promises.
+                (dataMax: number) =>
+                  Math.max(
+                    300,
+                    Math.ceil((Math.max(dataMax, trend.baseline_mean) * 1.05) / 300) * 300,
+                  ),
+              ]}
             />
             <Bar dataKey="value" fill="#1F5FE0" radius={[5, 5, 0, 0]} />
             <ReferenceLine

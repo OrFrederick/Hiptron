@@ -128,11 +128,15 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
 
 
 def _weekly_distance(
-    con: duckdb.DuckDBPyConnection, user_id: str
+    con: duckdb.DuckDBPyConnection, user_id: str, baseline_override: float | None = None
 ) -> WeeklyTrend:
     """Last-7-day daily walking distance + 4-week baseline.
 
     Shared by the relative home trend card and the senior week view.
+    `baseline_override` replaces the rolling baseline: when a distance decline
+    is active, the rolling mean is dragged down by the decline itself, so
+    "sonst" would understate what used to be normal and contradict the
+    worth-noticing card's pre-change value.
     """
     ref_row = con.execute(
         "SELECT max(date) FROM daily_features WHERE user_id = ?", (user_id,)
@@ -154,7 +158,11 @@ def _weekly_distance(
         """,
         (user_id,),
     ).fetchone()
-    baseline_mean = float(baseline[0]) if baseline else 0.0
+    baseline_mean = (
+        baseline_override
+        if baseline_override is not None
+        else (float(baseline[0]) if baseline else 0.0)
+    )
     return WeeklyTrend(
         headline=_trend_headline(points, baseline_mean),
         points=[WeeklyTrendPoint(date=d, value=v or 0.0) for d, v in points],
@@ -385,19 +393,24 @@ def relative_home(db_path: Path, user_id: str) -> RelativeHome:
         ).fetchone()
         ref_date = ref_date_row[0] if ref_date_row and ref_date_row[0] else dt.date.today()
 
-        weekly = _weekly_distance(con, user_id)
-
         payload = _recent_relative_changepoint(con, user_id, ref_date)
+        weekly = _weekly_distance(
+            con,
+            user_id,
+            baseline_override=(
+                float(payload["baseline_mean"])
+                if payload and payload["feature"] == "total_distance_m"
+                else None
+            ),
+        )
         worth = None
         status: Literal["green", "amber"] = "green"
         if payload:
             status = "amber"
+            headline, detail = _worth_noticing_texts(payload, _display_name(user_id))
             worth = WorthNoticing(
-                headline=payload["text"],
-                detail=(
-                    f"{_feature_de(payload['feature'])}: Mittelwert "
-                    f"{payload['baseline_mean']:.1f}, jetzt {payload['current_value']:.1f}."
-                ),
+                headline=headline,
+                detail=detail,
                 feature=payload["feature"],
             )
         last_update_row = con.execute(
@@ -405,9 +418,11 @@ def relative_home(db_path: Path, user_id: str) -> RelativeHome:
         ).fetchone()
         last_update = (last_update_row[0] if last_update_row else None) or dt.datetime.now()
 
+        # The frontend header pill already says "Diese Woche etwas auffällig" /
+        # "Alles sieht gut aus" — the subtext must add, not repeat.
         summary = (
             "Routine wirkt unauffällig." if status == "green"
-            else "Diese Woche ist etwas auffällig."
+            else "Unten steht, was sich verändert hat."
         )
         return RelativeHome(
             status=status,
@@ -423,16 +438,97 @@ def relative_home(db_path: Path, user_id: str) -> RelativeHome:
         con.close()
 
 
+def _km_de(meters: float) -> str:
+    if meters >= 950:
+        return f"{_de_num(meters / 1000.0)} km"
+    return f"{int(round(meters / 50.0) * 50)} m"
+
+
+def _worth_noticing_texts(payload: dict[str, Any], name: str) -> tuple[str, str]:
+    """Human card text from a changepoint payload. The payload's baked insight
+    text carries the pct measured AT DETECTION, which drifts from the live
+    trend-card pct as days pass and the two read as contradictory numbers —
+    so the card states the observation and the two values instead of a pct."""
+    feature = payload["feature"]
+    down = payload["direction"] == "down"
+    base = float(payload["baseline_mean"])
+    cur = float(payload["current_value"])
+    # When both values format to the same string ("200 m vs 200 m"), the card
+    # would claim a change while showing identical numbers — fall back to the
+    # detection-time percentage, which contradicts nothing (different metric
+    # or no second number on screen).
+    pct_fallback = (
+        f"Etwa {round(float(payload['abs_pct_delta']))}% "
+        f"{'weniger' if down else 'mehr'} als sonst."
+    )
+    if feature == "total_distance_m":
+        headline = (
+            f"{name} geht zur Zeit kürzere Strecken als sonst."
+            if down
+            else f"{name} geht zur Zeit längere Strecken als sonst."
+        )
+        # No "zuletzt" value here: the trend card right above shows this week's
+        # live average, and a second slightly different "recent" number
+        # (measured at detection) reads as a contradiction.
+        detail = f"Vorher waren es etwa {_km_de(base)} am Tag."
+    elif feature == "n_outings":
+        headline = (
+            f"{name} geht zur Zeit seltener raus als sonst."
+            if down
+            else f"{name} geht zur Zeit öfter raus als sonst."
+        )
+        # Daily averages are small fractions; weekly counts read human.
+        wk_base, wk_cur = round(base * 7), round(cur * 7)
+        detail = (
+            f"Sonst etwa {wk_base} Ausgänge pro Woche, zuletzt etwa {wk_cur}."
+            if wk_base != wk_cur
+            else pct_fallback
+        )
+    elif feature == "place_count":
+        headline = (
+            f"{name} besucht zur Zeit weniger verschiedene Orte als sonst."
+            if down
+            else f"{name} besucht zur Zeit mehr verschiedene Orte als sonst."
+        )
+        wk_base, wk_cur = round(base * 7), round(cur * 7)
+        detail = (
+            f"Sonst etwa {wk_base} Ortsbesuche pro Woche, zuletzt etwa {wk_cur}."
+            if wk_base != wk_cur
+            else pct_fallback
+        )
+    elif feature == "activity_radius_m":
+        headline = (
+            f"{name} bleibt zur Zeit näher am Zuhause als sonst."
+            if down
+            else f"{name} ist zur Zeit weiter unterwegs als sonst."
+        )
+        detail = (
+            f"Sonst etwa {_km_de(base)} von Zuhause, zuletzt etwa {_km_de(cur)}."
+            if _km_de(base) != _km_de(cur)
+            else pct_fallback
+        )
+    else:
+        headline = str(payload["text"])
+        detail = f"{_feature_de(feature)}: sonst {base:.0f}, zuletzt {cur:.0f}."
+    return headline, detail
+
+
 def _trend_headline(points: list[tuple[Any, Any]], baseline_mean: float) -> str:
+    # Values, not percentages: the worth-noticing card shows km values from its
+    # detection window, and a second percentage computed over a different window
+    # reads as a contradiction. "Sonst etwa X" anchors both cards to one number.
     if not points or baseline_mean <= 0:
         return "Noch nicht genug Daten."
     recent = sum((v or 0.0) for _, v in points) / max(1, len(points))
     delta_pct = (recent - baseline_mean) / baseline_mean * 100.0
     if abs(delta_pct) < 5:
-        return "Gehstrecke diese Woche stabil."
-    if delta_pct < 0:
-        return f"Gehstrecke ist ~{abs(delta_pct):.0f}% niedriger als der 4-Wochen-Mittelwert."
-    return f"Gehstrecke ist ~{delta_pct:.0f}% höher als der 4-Wochen-Mittelwert."
+        return "Gehstrecke diese Woche wie gewohnt."
+    grade = "deutlich" if abs(delta_pct) >= 25 else "etwas"
+    word = "weniger" if delta_pct < 0 else "mehr"
+    return (
+        f"Diese Woche {grade} {word} unterwegs: im Schnitt {_km_de(recent)} "
+        f"am Tag, sonst etwa {_km_de(baseline_mean)}."
+    )
 
 
 def _feature_de(feature: str) -> str:
