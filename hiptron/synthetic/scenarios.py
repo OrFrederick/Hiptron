@@ -40,7 +40,9 @@ class Scenario:
     # speed_decline_start_week is reached (drives speed_third_delta_pct).
     walk_fade_pct: float = 0.0
     # Mid-walk pauses: (min, max) short holds per outing from pause_start_week on.
-    # Each hold is 20–90 s — hard-capped under the 120 s place-cluster threshold.
+    # Each hold is 40–90 s, stepped ~12–18 m beside the path: counts as a stage-2
+    # pause (>= 30 s sub-threshold run) but can never chain into a >= 120 s
+    # place-cluster dwell.
     pauses_per_walk: tuple[int, int] | None = None
     pause_start_week: int | None = None
 
@@ -100,8 +102,13 @@ HELGA_SCENARIO = Scenario(
     home_lon=13.4050,
     outings_per_day=2,
     mean_outing_distance_m=1200.0,
-    distance_decline_pct_per_week=18.0,
-    decline_start_week=6,
+    # Decline timing tuned 2026-06-10: the changepoint must land within 14 days
+    # of DEMO_END or the caregiver card reads green (insights are stamped at
+    # detection date). 28%/wk from week 10 fires total_distance_m at 2026-05-28
+    # and keeps helga's headline on distance (earlier onsets spill changepoints
+    # into place_count/radius, muddying otto's story).
+    distance_decline_pct_per_week=28.0,
+    decline_start_week=10,
     end_dt=DEMO_END,
     walk_speed_mps=1.15,
     speed_decline_pct_per_week=3.5,
@@ -138,7 +145,7 @@ MARGARETE_SCENARIO = Scenario(
     end_dt=DEMO_END,
     walk_speed_mps=1.0,
     pauses_per_walk=(2, 4),
-    pause_start_week=6,
+    pause_start_week=8,
 )
 
 # Healthy control: no decline knobs. Seed chosen so the pinned-date data yields

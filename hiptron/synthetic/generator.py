@@ -225,15 +225,26 @@ def _emit_pause(
     t: datetime,
     gait_rng: random.Random,
 ) -> datetime:
-    """Short stationary hold mid-walk. 20-90 s — hard-capped under the 120 s
-    dwell threshold of the place clusterer, so pauses never become 'places'.
-    All draws come from gait_rng (never the main rng) to keep existing
-    personas' draw sequences unchanged."""
-    hold_s = gait_rng.uniform(20.0, 90.0)
-    for _ in range(max(2, int(hold_s // DWELL_SAMPLE_S))):
-        jlat = lat + gait_rng.gauss(0, 0.5) / METERS_PER_DEG_LAT
-        jlon = lon + gait_rng.gauss(0, 0.5) / (
-            METERS_PER_DEG_LAT * math.cos(math.radians(lat))
+    """Short hold mid-walk, stepped 12-18 m BESIDE the path (a bench, a shop
+    window). The >= 10 m jump on both sides breaks the place clusterer's
+    consecutive-fix run, so a hold can never chain with slow path segments
+    into a >= 120 s dwell and mint a fake place — regardless of local fix
+    spacing (the arc path's Bezier sampling drops below 10 m mid-curve).
+    40-90 s: the internal sub-threshold run is (n_fixes - 1) * 10 s >= 30 s,
+    clearing the stage-2 PAUSE_MIN_S floor, while 15-24 s structural route
+    artifacts stay below it. All draws come from gait_rng (never the main
+    rng) to keep existing personas' draw sequences unchanged."""
+    bearing = gait_rng.uniform(0.0, 2 * math.pi)
+    aside_m = gait_rng.uniform(12.0, 18.0)
+    c_lat = lat + (aside_m * math.cos(bearing)) / METERS_PER_DEG_LAT
+    c_lon = lon + (aside_m * math.sin(bearing)) / (
+        METERS_PER_DEG_LAT * math.cos(math.radians(lat))
+    )
+    hold_s = gait_rng.uniform(40.0, 90.0)
+    for _ in range(max(4, int(hold_s // DWELL_SAMPLE_S))):
+        jlat = c_lat + gait_rng.gauss(0, 0.5) / METERS_PER_DEG_LAT
+        jlon = c_lon + gait_rng.gauss(0, 0.5) / (
+            METERS_PER_DEG_LAT * math.cos(math.radians(c_lat))
         )
         rows.append((scenario.user_id, t, jlat, jlon, gait_rng.uniform(3.0, 8.0)))
         t += timedelta(seconds=DWELL_SAMPLE_S)

@@ -81,7 +81,7 @@ def test_demo_personas_gait_values():
     margarete = SCENARIOS["margarete"]
     assert margarete.walk_speed_mps == 1.0
     assert margarete.pauses_per_walk == (2, 4)
-    assert margarete.pause_start_week == 6
+    assert margarete.pause_start_week == 8
 
     assert SCENARIOS["otto"].walk_speed_mps == 1.1
     assert SCENARIOS["ingrid"].walk_speed_mps == 1.25
