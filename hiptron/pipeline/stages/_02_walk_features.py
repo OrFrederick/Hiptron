@@ -12,6 +12,13 @@ from hiptron.pipeline.stages._01_segment_walks import _haversine_m
 
 PAUSE_SPEED_THRESHOLD = 0.3
 
+# A sub-threshold run only counts as a pause when its cumulative duration reaches
+# this floor. Routed paths contain structural one-segment artifacts (spur turnaround
+# duplicate point, spur->spine junction, spine endpoint append) — each a single
+# zero-distance segment lasting one transit step (15-24 s at persona speeds) —
+# while real holds (destination dwell, mid-walk stops) are >= 30 s.
+PAUSE_MIN_S = 30.0
+
 
 def compute_walk_features(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("DELETE FROM walk_features")
@@ -31,7 +38,9 @@ def compute_walk_features(con: duckdb.DuckDBPyConnection) -> None:
             continue
         rows.append(_features_for_walk(walk_id, fixes))
     if rows:
-        con.executemany("INSERT INTO walk_features VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+        con.executemany(
+            "INSERT INTO walk_features VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows
+        )
 
 
 def _features_for_walk(walk_id: str, fixes: list[Any]) -> tuple[Any, ...]:
@@ -39,7 +48,12 @@ def _features_for_walk(walk_id: str, fixes: list[Any]) -> tuple[Any, ...]:
     speeds: list[float] = []
     dwell_s = 0.0
     pause_count = 0
-    prev_pause = False
+    pause_run_s = 0.0  # cumulative duration of the current sub-threshold run
+    # Transit-only sums (segments at/above the pause threshold): the honest inputs
+    # for gait speed. total_dist also accumulates dwell jitter path, so
+    # distance/(duration-dwell) overstates speed on short walks with long dwells.
+    transit_m = 0.0
+    transit_s = 0.0
 
     for i in range(1, len(fixes)):
         ts_a, lat_a, lon_a = fixes[i - 1]
@@ -53,11 +67,15 @@ def _features_for_walk(walk_id: str, fixes: list[Any]) -> tuple[Any, ...]:
         speeds.append(speed)
         if speed < PAUSE_SPEED_THRESHOLD:
             dwell_s += dt
-            if not prev_pause:
-                pause_count += 1
-                prev_pause = True
+            pause_run_s += dt
         else:
-            prev_pause = False
+            if pause_run_s >= PAUSE_MIN_S:
+                pause_count += 1
+            pause_run_s = 0.0
+            transit_m += d
+            transit_s += dt
+    if pause_run_s >= PAUSE_MIN_S:  # finalize a pause still open at walk end
+        pause_count += 1
 
     duration_s = (fixes[-1][0] - fixes[0][0]).total_seconds()
     mean_speed = total_dist / duration_s if duration_s > 0 else 0.0
@@ -81,6 +99,8 @@ def _features_for_walk(walk_id: str, fixes: list[Any]) -> tuple[Any, ...]:
         dwell_s,
         speed_third_delta_pct,
         route_hash,
+        transit_m,
+        transit_s,
     )
 
 

@@ -6,7 +6,7 @@ import { personaName, usePersona } from "../../shared/persona";
 import { Shell } from "../../shared/Shell";
 import { ErrorState, LoadingState } from "../../shared/states";
 import { HIP } from "../../shared/theme";
-import { DeltaRow, RhythmBars, RoutineBar } from "../../shared/charts";
+import { DeltaRow, PauseStat, RhythmBars, RoutineBar, SpeedTrendLine, TimeOutdoorsStat } from "../../shared/charts";
 
 const c = HIP.c;
 
@@ -63,6 +63,57 @@ export default function Patterns() {
               {data.rhythm.sentence}
             </div>
             <RhythmBars buckets={data.rhythm.buckets} />
+          </Card>
+        </>
+      )}
+
+      {data.time_outdoors && (
+        <>
+          <SectionLabel>Zeit draußen</SectionLabel>
+          <Card>
+            <div style={{ marginBottom: 12 }}>
+              <TimeOutdoorsStat avgMin={data.time_outdoors.avg_min_per_day} direction={data.time_outdoors.direction} />
+            </div>
+            <div style={{ fontSize: 15, color: c.textMuted, lineHeight: 1.4 }}>
+              {data.time_outdoors.sentence}
+            </div>
+          </Card>
+        </>
+      )}
+
+      {data.walking_speed && (
+        <>
+          <SectionLabel>Tempo</SectionLabel>
+          <Card>
+            <div style={{ fontSize: 15, color: c.textMuted, marginBottom: 12, lineHeight: 1.4 }}>
+              {data.walking_speed.sentence}
+            </div>
+            <SpeedTrendLine points={data.walking_speed.weekly} />
+          </Card>
+        </>
+      )}
+
+      {data.pauses && (
+        <>
+          <SectionLabel>Pausen unterwegs</SectionLabel>
+          <Card>
+            <div style={{ marginBottom: 12 }}>
+              <PauseStat avg={data.pauses.avg_pauses_per_walk} direction={data.pauses.direction} />
+            </div>
+            <div style={{ fontSize: 15, color: c.textMuted, lineHeight: 1.4 }}>
+              {data.pauses.sentence}
+            </div>
+          </Card>
+        </>
+      )}
+
+      {data.walk_fade && (
+        <>
+          <SectionLabel>Innerhalb eines Spaziergangs</SectionLabel>
+          <Card>
+            <div style={{ fontSize: 15, color: c.textMuted, lineHeight: 1.4 }}>
+              {data.walk_fade.sentence}
+            </div>
           </Card>
         </>
       )}

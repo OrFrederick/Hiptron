@@ -14,12 +14,17 @@ from hiptron.backend.models import (
     MonthlyDelta,
     OlderAdultHome,
     PatternsScreen,
+    PauseStats,
     Place,
     RelativeHome,
     Rhythm,
     RhythmBucket,
     RoutineScore,
     SchematicMap,
+    SpeedPoint,
+    TimeOutdoors,
+    WalkFade,
+    WalkingSpeed,
     WalkSummary,
     WeeklyTrend,
     WeeklyTrendPoint,
@@ -342,7 +347,7 @@ ALL_CLEAR_OLDER = "Schöne, gleichmäßige Woche. Weiter so."
 
 def _recent_relative_changepoint(
     con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Return the parsed payload of the most recent relative-audience insight
     within 14 days of *ref_date*, or None if there is none."""
     row = con.execute(
@@ -458,6 +463,16 @@ _WEEKDAYS_DE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Sams
 
 def _de_num(x: float, decimals: int = 1) -> str:
     return f"{x:.{decimals}f}".replace(".", ",")
+
+
+def _fmt_minutes(total_min: float) -> str:
+    m = int(round(total_min))
+    h, mm = divmod(m, 60)
+    if h and mm:
+        return f"{h} Std {mm} Min"
+    if h:
+        return f"{h} Std"
+    return f"{mm} Min"
 
 
 def _highlights(con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date) -> list[Highlight]:
@@ -637,6 +652,212 @@ def _routine(
     return RoutineScore(score=score, band=band, sentence=sentence)
 
 
+def _time_outdoors(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> TimeOutdoors | None:
+    # Tier-1 "minutes away from home" metric (catalog: D · M). Warm daily reassurance,
+    # NOT a gait/health signal. Pure read-side over daily_features.time_outdoors_min.
+    row = con.execute(
+        """
+        SELECT
+          avg(CASE WHEN date > ? - INTERVAL 28 DAY THEN time_outdoors_min END) AS this_v,
+          avg(CASE WHEN date <= ? - INTERVAL 28 DAY
+                    AND date > ? - INTERVAL 56 DAY THEN time_outdoors_min END) AS prior_v,
+          count(CASE WHEN date > ? - INTERVAL 28 DAY THEN 1 END) AS n_this
+        FROM daily_features
+        WHERE user_id = ? AND date > ? - INTERVAL 56 DAY
+        """,
+        (ref_date, ref_date, ref_date, ref_date, user_id, ref_date),
+    ).fetchone()
+    if row is None:
+        return None
+    this_v, prior_v, n_this = row
+    # Hidden gate: thin window (< ~8 active days) → no honest average. Mirrors _rhythm.
+    if this_v is None or n_this is None or int(n_this) < 8:
+        return None
+    if prior_v and prior_v > 0:
+        pct = (float(this_v) - float(prior_v)) / float(prior_v) * 100.0
+        # <10% month-to-month is everyday noise → "etwa gleich" (matches _monthly_deltas).
+        direction: Literal["up", "down", "flat"] = (
+            "flat" if abs(pct) < 10 else ("up" if pct > 0 else "down")
+        )
+    else:
+        pct, direction = 0.0, "flat"
+    tail = {
+        "flat": "Ähnlich wie im Vormonat.",
+        "up": "Etwas mehr als im Vormonat.",
+        "down": "Etwas weniger als im Vormonat.",
+    }[direction]
+    sentence = f"Im Schnitt etwa {_fmt_minutes(this_v)} pro Tag draußen. {tail}"
+    return TimeOutdoors(
+        avg_min_per_day=float(this_v),
+        prior_avg_min=float(prior_v or 0.0),
+        pct_delta=float(pct),
+        direction=direction,
+        sentence=sentence,
+    )
+
+
+def _walking_speed(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> WalkingSpeed | None:
+    # Moving speed = transit_m / transit_s (stage-2 sums over segments >= 0.3 m/s).
+    # NOT mean_speed and NOT distance/(duration-dwell): distance_m accumulates
+    # destination-dwell jitter path while dwell_s removes only the time, which
+    # INFLATES speed on short walks with long dwells (helga's late weeks read
+    # faster). Transit-only sums are the honest gait inputs.
+    weekly_rows = con.execute(
+        """
+        SELECT CAST(date_trunc('week', w.start_ts) AS DATE) AS wk,
+               sum(wf.transit_m) / nullif(sum(wf.transit_s), 0) AS mps
+        FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+        WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) > ? - INTERVAL 84 DAY
+        GROUP BY 1 ORDER BY 1
+        """,
+        (user_id, ref_date),
+    ).fetchall()
+    weekly = [
+        SpeedPoint(week_start=wk, kmh=round(float(mps) * 3.6, 2))
+        for wk, mps in weekly_rows
+        if mps is not None and mps > 0
+    ]
+    row = con.execute(
+        """
+        SELECT
+          sum(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY THEN wf.transit_m END)
+            / nullif(sum(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY
+                              THEN wf.transit_s END), 0) AS this_mps,
+          sum(CASE WHEN CAST(w.start_ts AS DATE) <= ? - INTERVAL 28 DAY THEN wf.transit_m END)
+            / nullif(sum(CASE WHEN CAST(w.start_ts AS DATE) <= ? - INTERVAL 28 DAY
+                              THEN wf.transit_s END), 0) AS prior_mps,
+          count(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY THEN 1 END) AS n_this
+        FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+        WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) > ? - INTERVAL 56 DAY
+        """,
+        (ref_date, ref_date, ref_date, ref_date, ref_date, user_id, ref_date),
+    ).fetchone()
+    if row is None:
+        return None
+    this_mps, prior_mps, n_this = row
+    # Hidden gate: < 10 walks in the window -> no honest average (mirrors _routine).
+    if this_mps is None or n_this is None or int(n_this) < 10:
+        return None
+    this_kmh = float(this_mps) * 3.6
+    prior_kmh = float(prior_mps) * 3.6 if prior_mps else 0.0
+    if prior_kmh > 0:
+        pct = (this_kmh - prior_kmh) / prior_kmh * 100.0
+        direction: Literal["up", "down", "flat"] = (
+            "flat" if abs(pct) < 10 else ("up" if pct > 0 else "down")
+        )
+    else:
+        pct, direction = 0.0, "flat"
+    tail = {
+        "flat": "Ähnlich wie im Vormonat.",
+        "up": "Etwas flotter als im Vormonat.",
+        "down": "Etwas langsamer als im Vormonat.",
+    }[direction]
+    sentence = f"Zuletzt im Schnitt etwa {_de_num(this_kmh)} km/h unterwegs. {tail}"
+    return WalkingSpeed(
+        weekly=weekly,
+        this_kmh=round(this_kmh, 2),
+        prior_kmh=round(prior_kmh, 2),
+        pct_delta=float(pct),
+        direction=direction,
+        sentence=sentence,
+    )
+
+
+def _pause_stats(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> PauseStats | None:
+    # GREATEST(pause_count - 1, 0): with the stage-2 >= 30 s pause floor, the only
+    # baseline stop per outing is the destination dwell; subtracting it isolates
+    # genuine mid-walk pauses. Dwell minutes are NOT shown (dwell_s is dominated by
+    # the destination dwell and cannot be separated read-side).
+    row = con.execute(
+        """
+        SELECT
+          avg(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY
+                   THEN GREATEST(wf.pause_count - 1, 0) END) AS this_p,
+          avg(CASE WHEN CAST(w.start_ts AS DATE) <= ? - INTERVAL 28 DAY
+                   THEN GREATEST(wf.pause_count - 1, 0) END) AS prior_p,
+          count(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY THEN 1 END) AS n_this
+        FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+        WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) > ? - INTERVAL 56 DAY
+        """,
+        (ref_date, ref_date, ref_date, user_id, ref_date),
+    ).fetchone()
+    if row is None:
+        return None
+    this_p, prior_p, n_this = row
+    if this_p is None or n_this is None or int(n_this) < 10:
+        return None
+    this_v = float(this_p)
+    prior_v = float(prior_p or 0.0)
+    # Absolute gate: prior averages sit near zero, percent deltas would be unstable.
+    diff = this_v - prior_v
+    direction: Literal["up", "down", "flat"] = (
+        "flat" if abs(diff) < 0.7 else ("up" if diff > 0 else "down")
+    )
+    if this_v < 0.5 and direction == "flat":
+        sentence = "Geht meist ohne Zwischenstopp durch."
+    elif direction == "up":
+        sentence = (
+            "Macht unterwegs öfter kurz Halt als im Vormonat. "
+            "Eine kleine Pause gehört dazu."
+        )
+    elif direction == "down":
+        sentence = "Macht unterwegs seltener Halt als im Vormonat."
+    else:
+        sentence = "Macht ab und zu kurz Halt unterwegs. Ähnlich wie im Vormonat."
+    return PauseStats(
+        avg_pauses_per_walk=round(this_v, 1),
+        prior_avg=round(prior_v, 1),
+        direction=direction,
+        sentence=sentence,
+    )
+
+
+def _walk_fade(
+    con: duckdb.DuckDBPyConnection, user_id: str, ref_date: dt.date
+) -> WalkFade | None:
+    # Within-walk tempo profile. Negative = slower towards the end of a walk.
+    # Worded as a tempo observation.
+    row = con.execute(
+        """
+        SELECT
+          avg(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY
+                   THEN wf.speed_third_delta_pct END) AS this_d,
+          avg(CASE WHEN CAST(w.start_ts AS DATE) <= ? - INTERVAL 28 DAY
+                   THEN wf.speed_third_delta_pct END) AS prior_d,
+          count(CASE WHEN CAST(w.start_ts AS DATE) > ? - INTERVAL 28 DAY THEN 1 END) AS n_this
+        FROM walks w JOIN walk_features wf ON wf.walk_id = w.walk_id
+        WHERE w.user_id = ? AND CAST(w.start_ts AS DATE) > ? - INTERVAL 56 DAY
+        """,
+        (ref_date, ref_date, ref_date, user_id, ref_date),
+    ).fetchone()
+    if row is None:
+        return None
+    this_d, prior_d, n_this = row
+    if this_d is None or n_this is None or int(n_this) < 10:
+        return None
+    this_v = float(this_d)
+    direction: Literal["up", "down", "flat"] = "down" if this_v <= -8.0 else "flat"
+    if direction == "down":
+        sentence = (
+            "Gegen Ende eines Spaziergangs wird das Tempo ruhiger. "
+            f"Das letzte Drittel ist etwa {abs(round(this_v))} % langsamer."
+        )
+    else:
+        sentence = "Das Tempo bleibt über den Spaziergang hinweg ähnlich."
+    return WalkFade(
+        this_delta_pct=round(this_v, 1),
+        prior_delta_pct=round(float(prior_d or 0.0), 1),
+        direction=direction,
+        sentence=sentence,
+    )
+
+
 def patterns_screen(db_path: Path, user_id: str) -> PatternsScreen:
     con = _con(db_path)
     try:
@@ -650,6 +871,10 @@ def patterns_screen(db_path: Path, user_id: str) -> PatternsScreen:
             rhythm=_rhythm(con, user_id, ref_date),
             monthly_deltas=_monthly_deltas(con, user_id, ref_date),
             routine=_routine(con, user_id, ref_date),
+            time_outdoors=_time_outdoors(con, user_id, ref_date),
+            walking_speed=_walking_speed(con, user_id, ref_date),
+            pauses=_pause_stats(con, user_id, ref_date),
+            walk_fade=_walk_fade(con, user_id, ref_date),
         )
     finally:
         con.close()

@@ -81,6 +81,10 @@ def _m_to_deg_lon(m: float, at_lat: float) -> float:
 def generate(scenario: Scenario, con: duckdb.DuckDBPyConnection) -> None:
     """Write synthetic GPS fixes for `scenario` into the `gps_fixes` table."""
     rng = random.Random(scenario.seed)
+    # Separate stream for all gait-related draws (pause placement/holds): keeps the
+    # main draw sequence bit-identical to pre-gait code, so route/place/changepoint
+    # timing of existing personas does not drift.
+    gait_rng = random.Random(f"{scenario.seed}-gait")
     rows: list[tuple[str, datetime, float, float, float]] = []
 
     start = scenario.start().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -114,7 +118,9 @@ def generate(scenario: Scenario, con: duckdb.DuckDBPyConnection) -> None:
             start_dt = intended
             if next_free is not None and start_dt < next_free:
                 start_dt = next_free
-            end_dt = _emit_outing(rows, scenario, place, start_dt, decline_factor, rng)
+            end_dt = _emit_outing(
+                rows, scenario, place, start_dt, decline_factor, rng, week_idx, gait_rng
+            )
             outing_spans.append((start_dt, end_dt))
             next_free = end_dt + timedelta(minutes=15)
         day += timedelta(days=1)
@@ -168,6 +174,83 @@ def _outings_for_week(scenario: Scenario, week_idx: int) -> int:
     return max(1, base - 1 - weeks_in // 3)
 
 
+def _gait_speed_mps(scenario: Scenario, week_idx: int) -> float:
+    """Transit speed for this week: base speed, optionally declining after onset."""
+    speed = scenario.walk_speed_mps
+    start = scenario.speed_decline_start_week
+    if start is not None and week_idx >= start and scenario.speed_decline_pct_per_week > 0:
+        weeks_in = week_idx - start + 1
+        speed *= max(0.6, 1.0 - scenario.speed_decline_pct_per_week / 100.0 * weeks_in)
+    return speed
+
+
+def _fade_factor(scenario: Scenario, week_idx: int) -> float:
+    """Return-leg speed multiplier (<1 = the whole return leg is walked slower)."""
+    start = scenario.speed_decline_start_week
+    if scenario.walk_fade_pct > 0 and start is not None and week_idx >= start:
+        return max(0.05, 1.0 - scenario.walk_fade_pct / 100.0)
+    return 1.0
+
+
+def _pause_plan(
+    scenario: Scenario, week_idx: int, n_leg_pts: int, gait_rng: random.Random
+) -> tuple[set[int], set[int]]:
+    """Pick outbound/return fix indices at which to hold. Empty when inactive."""
+    if (
+        scenario.pauses_per_walk is None
+        or scenario.pause_start_week is None
+        or week_idx < scenario.pause_start_week
+        or n_leg_pts < 8
+    ):
+        return set(), set()
+    lo, hi = scenario.pauses_per_walk
+    n = gait_rng.randint(lo, hi)
+    n_out = n // 2
+    n_back = n - n_out
+
+    def pick(k: int) -> set[int]:
+        if k <= 0:
+            return set()
+        candidates = range(2, n_leg_pts - 2)
+        return set(gait_rng.sample(candidates, min(k, len(candidates))))
+
+    return pick(n_out), pick(n_back)
+
+
+def _emit_pause(
+    rows: list[Any],
+    scenario: Scenario,
+    lat: float,
+    lon: float,
+    t: datetime,
+    gait_rng: random.Random,
+) -> datetime:
+    """Short hold mid-walk, stepped 12-18 m BESIDE the path (a bench, a shop
+    window). The >= 10 m jump on both sides breaks the place clusterer's
+    consecutive-fix run, so a hold can never chain with slow path segments
+    into a >= 120 s dwell and mint a fake place — regardless of local fix
+    spacing (the arc path's Bezier sampling drops below 10 m mid-curve).
+    40-90 s: the internal sub-threshold run is (n_fixes - 1) * 10 s >= 30 s,
+    clearing the stage-2 PAUSE_MIN_S floor, while 15-24 s structural route
+    artifacts stay below it. All draws come from gait_rng (never the main
+    rng) to keep existing personas' draw sequences unchanged."""
+    bearing = gait_rng.uniform(0.0, 2 * math.pi)
+    aside_m = gait_rng.uniform(12.0, 18.0)
+    c_lat = lat + (aside_m * math.cos(bearing)) / METERS_PER_DEG_LAT
+    c_lon = lon + (aside_m * math.sin(bearing)) / (
+        METERS_PER_DEG_LAT * math.cos(math.radians(lat))
+    )
+    hold_s = gait_rng.uniform(40.0, 90.0)
+    for _ in range(max(4, int(hold_s // DWELL_SAMPLE_S))):
+        jlat = c_lat + gait_rng.gauss(0, 0.5) / METERS_PER_DEG_LAT
+        jlon = c_lon + gait_rng.gauss(0, 0.5) / (
+            METERS_PER_DEG_LAT * math.cos(math.radians(c_lat))
+        )
+        rows.append((scenario.user_id, t, jlat, jlon, gait_rng.uniform(3.0, 8.0)))
+        t += timedelta(seconds=DWELL_SAMPLE_S)
+    return t
+
+
 def _places_for_week(
     scenario: Scenario, week_idx: int, rng: random.Random
 ) -> tuple[NamedPlace, ...]:
@@ -204,13 +287,24 @@ def _emit_outing(
     start_dt: datetime,
     decline_factor: float,
     rng: random.Random,
+    week_idx: int,
+    gait_rng: random.Random,
 ) -> datetime:
     """Emit one outing's GPS fixes. Personas with baked street routes walk real
     OSM streets; everyone else falls back to the geometric arc model."""
+    speed = _gait_speed_mps(scenario, week_idx)
+    step_out_s = TRANSIT_STEP_M / speed
+    step_back_s = step_out_s / _fade_factor(scenario, week_idx)
     user_route = _routes().get(scenario.user_id)
     if user_route is not None and place.label in user_route.get("places", {}):
-        return _emit_outing_routed(rows, scenario, place, start_dt, decline_factor, rng, user_route)
-    return _emit_outing_arc(rows, scenario, place, start_dt, decline_factor, rng)
+        return _emit_outing_routed(
+            rows, scenario, place, start_dt, decline_factor, rng, user_route,
+            week_idx, gait_rng, step_out_s, step_back_s,
+        )
+    return _emit_outing_arc(
+        rows, scenario, place, start_dt, decline_factor, rng,
+        week_idx, gait_rng, step_out_s, step_back_s,
+    )
 
 
 def _emit_outing_routed(
@@ -221,6 +315,10 @@ def _emit_outing_routed(
     decline_factor: float,
     rng: random.Random,
     route: dict[str, Any],
+    week_idx: int,
+    gait_rng: random.Random,
+    step_out_s: float,
+    step_back_s: float,
 ) -> datetime:
     """Walk real streets: a near-home block-loop spur pads the distance, then the
     spine carries the user out to the snapped on-street place, dwell, and back.
@@ -239,10 +337,6 @@ def _emit_outing_routed(
     )
     oneway_m = round_trip_m / 2.0
 
-    step_s = TRANSIT_STEP_S
-    if scenario.fatigue_onset_week is not None:
-        step_s = int(TRANSIT_STEP_S / 0.9)
-
     # Pad spur: walk out along the block loop and back, so the spur starts and ends
     # at home and joins the spine seamlessly. Its length tops up the spine to oneway.
     pad_oneway = max(0.0, oneway_m - spine_len)
@@ -255,6 +349,8 @@ def _emit_outing_routed(
     outbound = spur + spine_pts
     dest = spine[-1]
 
+    pause_out, pause_back = _pause_plan(scenario, week_idx, len(outbound), gait_rng)
+
     def emit_ll(lat: float, lon: float, ts: datetime, jitter_m: float) -> None:
         jlat = lat + rng.gauss(0, jitter_m) / METERS_PER_DEG_LAT
         jlon = lon + rng.gauss(0, jitter_m) / (
@@ -263,18 +359,22 @@ def _emit_outing_routed(
         rows.append((scenario.user_id, ts, jlat, jlon, rng.uniform(3.0, 8.0)))
 
     t = start_dt
-    for lat, lon in outbound:
+    for i, (lat, lon) in enumerate(outbound):
         emit_ll(lat, lon, t, 1.5)
-        t += timedelta(seconds=step_s)
+        t += timedelta(seconds=step_out_s)
+        if i in pause_out:
+            t = _emit_pause(rows, scenario, lat, lon, t, gait_rng)
 
     dwell_min = rng.randint(10, 40)
     for _ in range(dwell_min * 60 // DWELL_SAMPLE_S):
         emit_ll(dest[0], dest[1], t, 0.5)
         t += timedelta(seconds=DWELL_SAMPLE_S)
 
-    for lat, lon in reversed(outbound):
+    for i, (lat, lon) in enumerate(reversed(outbound)):
         emit_ll(lat, lon, t, 1.5)
-        t += timedelta(seconds=step_s)
+        t += timedelta(seconds=step_back_s)
+        if i in pause_back:
+            t = _emit_pause(rows, scenario, lat, lon, t, gait_rng)
     return t
 
 
@@ -285,6 +385,10 @@ def _emit_outing_arc(
     start_dt: datetime,
     decline_factor: float,
     rng: random.Random,
+    week_idx: int,
+    gait_rng: random.Random,
+    step_out_s: float,
+    step_back_s: float,
 ) -> datetime:
     # Work in a local metre plane centred on home: x = east, y = north.
     east_m = place.lon_offset_m
@@ -296,10 +400,6 @@ def _emit_outing_arc(
         scenario.mean_outing_distance_m * decline_factor * rng.uniform(0.7, 1.3),
     )
     oneway_m = round_trip_m / 2.0
-
-    step_s = TRANSIT_STEP_S
-    if scenario.fatigue_onset_week is not None:
-        step_s = int(TRANSIT_STEP_S / 0.9)
 
     # Unit perpendicular to the home->place direction (for the route's bow).
     if straight_m < 1.0:
@@ -333,11 +433,22 @@ def _emit_outing_arc(
     t = start_dt
     out_sign = rng.choice((-1.0, 1.0))
 
+    pause_out, pause_back = _pause_plan(scenario, week_idx, n_steps + 1, gait_rng)
+
     # Outbound leg: home -> place along a gentle curve.
     for i in range(n_steps + 1):
         x_m, y_m = curve(i / n_steps, out_sign)
         emit(x_m, y_m, t, 1.5)
-        t += timedelta(seconds=step_s)
+        t += timedelta(seconds=step_out_s)
+        if i in pause_out:
+            t = _emit_pause(
+                rows,
+                scenario,
+                scenario.home_lat + _m_to_deg_lat(y_m),
+                scenario.home_lon + _m_to_deg_lon(x_m, scenario.home_lat),
+                t,
+                gait_rng,
+            )
 
     # Dwell at the destination: densely sampled, near-stationary, tightly clustered.
     dwell_min = rng.randint(10, 40)
@@ -349,5 +460,14 @@ def _emit_outing_arc(
     for i in range(1, n_steps + 1):
         x_m, y_m = curve(1.0 - i / n_steps, -out_sign)
         emit(x_m, y_m, t, 1.5)
-        t += timedelta(seconds=step_s)
+        t += timedelta(seconds=step_back_s)
+        if i in pause_back:
+            t = _emit_pause(
+                rows,
+                scenario,
+                scenario.home_lat + _m_to_deg_lat(y_m),
+                scenario.home_lon + _m_to_deg_lon(x_m, scenario.home_lat),
+                t,
+                gait_rng,
+            )
     return t
