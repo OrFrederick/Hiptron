@@ -1,5 +1,6 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { useEmbedSuffix } from "./embed";
 import { Ic } from "./Icon";
 import { Avatar, Card, SlimNavyHeader } from "./kit";
 import { personaName, usePersona } from "./persona";
@@ -17,9 +18,10 @@ export default function ProfileScreen() {
   const [params] = useSearchParams();
   const mode = params.get("m") === "relative" ? "relative" : "older";
   const name = personaName(userId);
+  const e = useEmbedSuffix();
 
   const back = () =>
-    navigate(mode === "relative" ? `/relative?u=${userId}` : `/older-adult?u=${userId}`);
+    navigate(mode === "relative" ? `/relative?u=${userId}${e}` : `/older-adult?u=${userId}${e}`);
 
   return (
     <Shell active="profil" mode={mode}>
@@ -39,7 +41,7 @@ export default function ProfileScreen() {
         title="Was Hiptron sieht"
         rows={[
           { icon: "walk", tint: c.blue50, color: c.blue600, text: "Deine täglichen Geh-Muster: Strecke, Ausgänge, Orte" },
-          { icon: "route", tint: c.green50, color: c.green600, text: "Die Route der letzten Runde auf der Karte" },
+          { icon: "route", tint: c.green50, color: c.green600, text: "Deine Wege der letzten Tage auf der Karte" },
         ]}
       />
 

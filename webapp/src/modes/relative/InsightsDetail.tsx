@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 
 import { useRelativeInsights } from "../../shared/api";
+import { useEmbedSuffix } from "../../shared/embed";
 import { Ic } from "../../shared/Icon";
 import { Card, SlimNavyHeader } from "../../shared/kit";
 import { personaName, usePersona } from "../../shared/persona";
@@ -18,6 +19,7 @@ const c = HIP.c;
 
 export default function InsightsDetail() {
   const userId = usePersona();
+  const e = useEmbedSuffix();
   const navigate = useNavigate();
   const { data, isLoading, isError } = useRelativeInsights(userId);
 
@@ -28,24 +30,37 @@ export default function InsightsDetail() {
 
   return (
     <Shell active="stats" mode="relative">
-      <SlimNavyHeader title="Einblicke" onBack={() => navigate(`/relative?u=${userId}`)} />
+      <SlimNavyHeader title="Einblicke" onBack={() => navigate(`/relative?u=${userId}${e}`)} />
+
+      <Card
+        onClick={() => navigate(`/relative/patterns?u=${userId}${e}`)}
+        ariaLabel="Rückblick und Muster öffnen"
+        style={{
+          background: HIP.heroGradient,
+          border: "none",
+          boxShadow: HIP.shadow.btn,
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          minHeight: 64,
+          cursor: "pointer",
+        }}
+      >
+        <span style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.16)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Ic name="bars" size={22} color="#fff" sw={2} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>Rückblick &amp; Muster</div>
+          <div style={{ fontSize: 13.5, fontWeight: 500, color: "rgba(255,255,255,0.72)", marginTop: 2 }}>Muster &amp; Verlauf im Überblick</div>
+        </div>
+        <Ic name="chevron" size={20} color="rgba(255,255,255,0.8)" sw={2.2} />
+      </Card>
 
       {data.blocks
         .filter((b) => !b.hidden)
         .map((b) => (
           <BlockFor key={b.question} block={b} />
         ))}
-
-      <Card
-        onClick={() => navigate(`/relative/patterns?u=${userId}`)}
-        style={{ display: "flex", alignItems: "center", gap: 14, minHeight: 56, cursor: "pointer" }}
-      >
-        <span style={{ width: 40, height: 40, borderRadius: "50%", background: c.blue50, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Ic name="bars" size={20} color={c.blue600} sw={2} />
-        </span>
-        <div style={{ flex: 1, fontSize: 17, fontWeight: 600, color: c.textDark }}>Rückblick &amp; Muster</div>
-        <Ic name="chevron" size={18} color={c.textMuted} sw={2} />
-      </Card>
 
       <div style={{ textAlign: "center", fontSize: 13.5, color: c.textMuted, lineHeight: 1.5, marginTop: 2, marginBottom: 4 }}>
         {name} teilt diese Einblicke mit dir.

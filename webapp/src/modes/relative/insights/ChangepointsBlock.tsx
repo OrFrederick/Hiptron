@@ -1,5 +1,5 @@
 import { Ic } from "../../../shared/Icon";
-import { InsightBlock } from "../../../shared/kit";
+import { InsightCard } from "../../../shared/kit";
 import { HIP } from "../../../shared/theme";
 import type { InsightBlock as InsightBlockData } from "../../../shared/types";
 
@@ -19,7 +19,7 @@ const DIRECTION_DE: Record<string, string> = {
 export function ChangepointsBlock({ block }: { block: InsightBlockData }) {
   const items = block.series;
   return (
-    <InsightBlock question={block.question} verdict={block.verdict}>
+    <InsightCard label="Veränderungen" headline={block.verdict}>
       {items.length === 0 ? (
         <div style={{ display: "flex", alignItems: "center", gap: 13, padding: "4px 2px" }}>
           <span
@@ -53,7 +53,7 @@ export function ChangepointsBlock({ block }: { block: InsightBlockData }) {
                   alignItems: "flex-start",
                   gap: 13,
                   padding: "12px 0",
-                  borderBottom: i === items.length - 1 ? "none" : `1px solid ${c.line}`,
+                  borderTop: i === 0 ? "none" : `1px solid ${c.line}`,
                 }}
               >
                 <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.blue600, opacity: 0.85, marginTop: 6, flexShrink: 0 }} />
@@ -68,6 +68,6 @@ export function ChangepointsBlock({ block }: { block: InsightBlockData }) {
           })}
         </div>
       )}
-    </InsightBlock>
+    </InsightCard>
   );
 }

@@ -9,6 +9,7 @@ import Patterns from "./modes/relative/Patterns";
 import { Ic } from "./shared/Icon";
 import ProfileScreen from "./shared/ProfileScreen";
 import { PersonaSwitcher } from "./shared/PersonaSwitcher";
+import { useEmbed } from "./shared/embed";
 import { usePersona } from "./shared/persona";
 import { HIP } from "./shared/theme";
 
@@ -114,6 +115,8 @@ function Centered({ children }: { children: ReactNode }) {
 
 function ModeChooser() {
   const userId = usePersona();
+  const embed = useEmbed();
+  const e = embed ? "&embed=1" : "";
   return (
     <Centered>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
@@ -144,17 +147,19 @@ function ModeChooser() {
         </div>
 
         <div style={{ width: "100%", marginTop: 38, display: "flex", flexDirection: "column", gap: 14 }}>
-          <ModeButton filled to={`/older-adult?u=${userId}`} title="Senior-Modus" sub="Für mich selbst" />
-          <ModeButton to={`/relative?u=${userId}`} title="Angehörigen-Modus" sub="Für jemanden, den ich begleite" />
+          <ModeButton filled to={`/older-adult?u=${userId}${e}`} title="Senior-Modus" sub="Für mich selbst" />
+          <ModeButton to={`/relative?u=${userId}${e}`} title="Angehörigen-Modus" sub="Für jemanden, den ich begleite" />
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 24 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: c.textMuted }}>
-          Demo
-        </span>
-        <PersonaSwitcher />
-      </div>
+      {!embed && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 24 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: c.textMuted }}>
+            Demo
+          </span>
+          <PersonaSwitcher />
+        </div>
+      )}
     </Centered>
   );
 }

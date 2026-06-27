@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useOlderAdultHome } from "../../shared/api";
 import { PlaceBars, WeekBars } from "../../shared/charts";
+import { useEmbedSuffix } from "../../shared/embed";
 import { BackButtonBig, Card, NavyLabel } from "../../shared/kit";
 import { kmLabel, placeLabel } from "../../shared/labels";
 import { usePersona } from "../../shared/persona";
@@ -14,6 +15,7 @@ const WEEKDAYS_DE = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
 export default function OlderAdultWeekView() {
   const userId = usePersona();
+  const e = useEmbedSuffix();
   const navigate = useNavigate();
   const { data, isLoading, isError } = useOlderAdultHome(userId);
 
@@ -37,7 +39,7 @@ export default function OlderAdultWeekView() {
 
   return (
     <Shell active="stats" mode="older">
-      <BackButtonBig onBack={() => navigate(`/older-adult?u=${userId}`)} />
+      <BackButtonBig onBack={() => navigate(`/older-adult?u=${userId}${e}`)} />
 
       <NavyLabel style={{ marginTop: 2, marginBottom: -2 }}>Meine Woche</NavyLabel>
 

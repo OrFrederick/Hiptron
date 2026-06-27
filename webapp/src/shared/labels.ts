@@ -1,15 +1,64 @@
-const PLACE_LABEL_DE: Record<string, string> = {
+// Canonical place metadata, shared by every place-rendering surface (map pins,
+// week view, insights, walk cards). Keys are the synthetic generator's place
+// labels; each persona owns a distinct subset (see hiptron/synthetic/scenarios.py).
+export const PLACE_LABEL_DE: Record<string, string> = {
+  // helga (reference)
   bakery: "Bäckerei",
   park: "Park",
   doctor: "Arzt",
   friend: "Freundin",
   shop: "Laden",
+  // ingrid
+  cafe: "Café",
+  library: "Bücherei",
+  optician: "Optiker",
+  neighbor: "Nachbarin",
+  market: "Markt",
+  // margarete
+  konditorei: "Konditorei",
+  biergarten: "Biergarten",
+  clinic: "Praxis",
+  daughter: "Tochter",
+  grocer: "Lebensmittel",
+  // otto
+  bistro: "Bistro",
+  kiosk: "Kiosk",
+  hardware: "Baumarkt",
+  sister: "Schwester",
+  pharmacy: "Apotheke",
+};
+
+export const PLACE_COLOR: Record<string, string> = {
+  bakery: "#F2B705",
+  park: "#34A853",
+  doctor: "#1F5FE0",
+  friend: "#8B5CF6",
+  shop: "#0EA5A0",
+  cafe: "#B45309",
+  library: "#6366F1",
+  optician: "#0891B2",
+  neighbor: "#DB2777",
+  market: "#16A34A",
+  konditorei: "#D97706",
+  biergarten: "#65A30D",
+  clinic: "#2563EB",
+  daughter: "#E11D48",
+  grocer: "#059669",
+  bistro: "#C2410C",
+  kiosk: "#7C3AED",
+  hardware: "#475569",
+  sister: "#BE185D",
+  pharmacy: "#0D9488",
 };
 
 export function placeLabel(s: string): string {
   if (PLACE_LABEL_DE[s]) return PLACE_LABEL_DE[s];
   if (s.startsWith("place_")) return "Ort";
   return s;
+}
+
+export function placeColor(s: string): string {
+  return PLACE_COLOR[s] ?? "#1F5FE0";
 }
 
 export function kmLabel(distance_m: number): { value: string; unit: string } {

@@ -1,22 +1,9 @@
 import { Card } from "../../../shared/Card";
+import { placeLabel } from "../../../shared/labels";
 import type { WalkSummary } from "../../../shared/types";
 
 interface Props {
   walk: WalkSummary | null;
-}
-
-const PLACE_LABEL_DE: Record<string, string> = {
-  bakery: "Bäckerei",
-  park: "Park",
-  doctor: "Arzt",
-  friend: "Freundin",
-  shop: "Laden",
-};
-
-function placeLabel(s: string): string {
-  if (PLACE_LABEL_DE[s]) return PLACE_LABEL_DE[s];
-  if (s.startsWith("place_")) return "Ort";
-  return s;
 }
 
 export function YesterdayWalkCard({ walk }: Props) {

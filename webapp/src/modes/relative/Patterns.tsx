@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 
 import { useRelativePatterns } from "../../shared/api";
+import { useEmbedSuffix } from "../../shared/embed";
 import { Card, SectionLabel, SlimNavyHeader } from "../../shared/kit";
 import { personaName, usePersona } from "../../shared/persona";
 import { Shell } from "../../shared/Shell";
@@ -12,6 +13,7 @@ const c = HIP.c;
 
 export default function Patterns() {
   const userId = usePersona();
+  const e = useEmbedSuffix();
   const navigate = useNavigate();
   const { data, isLoading, isError } = useRelativePatterns(userId);
 
@@ -22,7 +24,7 @@ export default function Patterns() {
 
   return (
     <Shell active="stats" mode="relative">
-      <SlimNavyHeader title="Rückblick & Muster" onBack={() => navigate(`/relative?u=${userId}`)} />
+      <SlimNavyHeader title="Rückblick & Muster" onBack={() => navigate(`/relative?u=${userId}${e}`)} />
 
       {data.highlights.length > 0 && (
         <>

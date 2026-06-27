@@ -3,28 +3,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import type { Place, SchematicMap } from "./types";
-
-const LABEL_DE: Record<string, string> = {
-  bakery: "Bäckerei",
-  park: "Park",
-  doctor: "Arzt",
-  friend: "Freundin",
-  shop: "Laden",
-};
-
-const LABEL_COLOR: Record<string, string> = {
-  bakery: "#F2B705",
-  park: "#34A853",
-  doctor: "#1F5FE0",
-  friend: "#8B5CF6",
-  shop: "#0EA5A0",
-};
-
-function labelDe(s: string): string {
-  if (LABEL_DE[s]) return LABEL_DE[s];
-  if (s.startsWith("place_")) return "Ort";
-  return s;
-}
+import { placeColor, placeLabel } from "./labels";
 
 // Clustering splits one real spot (e.g. the bakery) into several low-visit
 // clusters with the same label. On a real map that reads as "3× Bäckerei",
@@ -39,8 +18,8 @@ function mergeByLabel(places: Place[]): Place[] {
 }
 
 function placeIcon(label: string, flip = false): L.DivIcon {
-  const color = LABEL_COLOR[label] ?? "#1F5FE0";
-  const text = labelDe(label);
+  const color = placeColor(label);
+  const text = placeLabel(label);
   const html = flip
     ? `<div style="display:flex;flex-direction:column;align-items:center;transform:translateY(-50%)">
       <span style="margin-bottom:3px;font:600 12.5px/1 -apple-system,system-ui,sans-serif;color:#1A2230;white-space:nowrap;text-shadow:0 1px 2px #fff,0 0 3px #fff,0 0 3px #fff">${text}</span>
@@ -131,15 +110,26 @@ export function LeafletMap({ map, height = 210, interactive = false, lastSeenIni
       L.control.attribution({ prefix: false, position: "bottomright" }).addTo(m);
 
       const places = mergeByLabel(map.places ?? []);
-      const line = (map.walk_polyline ?? []).filter(
-        (p): p is [number, number] => Array.isArray(p) && p.length === 2,
-      );
+      const isLatLng = (p: unknown): p is [number, number] =>
+        Array.isArray(p) && p.length === 2;
+      // Prefer the multi-walk layer (a week of loops); fall back to the single line.
+      const rawLines =
+        map.walk_polylines && map.walk_polylines.length > 0
+          ? map.walk_polylines
+          : [map.walk_polyline ?? []];
+      const lines = rawLines
+        .map((ln) => (ln ?? []).filter(isLatLng))
+        .filter((ln) => ln.length > 1);
+      const newest = lines[0] ?? [];
 
-      if (line.length > 1) {
-        L.polyline(line, {
+      // Draw oldest first so the newest walk sits bold on top; earlier walks are
+      // faint trails, so a week of routine reads without burying the latest one.
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const isNewest = i === 0;
+        L.polyline(lines[i]!, {
           color: "#1F5FE0",
-          weight: 5,
-          opacity: 1,
+          weight: isNewest ? 5 : 3,
+          opacity: isNewest ? 1 : 0.32,
           lineJoin: "round",
           lineCap: "round",
         }).addTo(m);
@@ -161,7 +151,7 @@ export function LeafletMap({ map, height = 210, interactive = false, lastSeenIni
         keyboard: false,
       }).addTo(m);
 
-      const lastPt = line[line.length - 1];
+      const lastPt = newest[newest.length - 1];
       if (lastSeenInitial && lastPt) {
         L.marker(lastPt, {
           icon: lastSeenIcon(lastSeenInitial),
@@ -173,7 +163,7 @@ export function LeafletMap({ map, height = 210, interactive = false, lastSeenIni
       const pts: [number, number][] = [
         [map.home_lat, map.home_lon],
         ...places.map((p): [number, number] => [p.centroid_lat, p.centroid_lon]),
-        ...line,
+        ...lines.flat(),
       ];
       const bounds = L.latLngBounds(pts);
       if (bounds.isValid()) {

@@ -38,8 +38,11 @@ def _baked_dests() -> dict[str, list[tuple[str, float, float]]]:
         return {}
     out: dict[str, list[tuple[str, float, float]]] = {}
     for user_id, r in routes.items():
+        # places[label] = {"out": [[lat,lon],...], "back": [...]}; the dwell pin is
+        # the shared destination at the end of the outbound leg.
         out[user_id] = [
-            (label, spine[-1][0], spine[-1][1]) for label, spine in r["places"].items()
+            (label, legs["out"][-1][0], legs["out"][-1][1])
+            for label, legs in r["places"].items()
         ]
     return out
 

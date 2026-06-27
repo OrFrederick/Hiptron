@@ -26,7 +26,12 @@ class SchematicMap(BaseModel):
     home_lat: float
     home_lon: float
     places: list[Place]
+    # The single most-recent walk (legacy/back-compat: the SVG fallback projection).
     walk_polyline: list[tuple[float, float]]
+    # Every walk from the last 7 days, newest first, one polyline per walk. The live
+    # map layers these (newest bold, older faint) so the route reads as a week of
+    # real loops rather than a single line.
+    walk_polylines: list[list[tuple[float, float]]] = []
 
 
 class WeeklyTrendPoint(BaseModel):

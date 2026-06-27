@@ -212,10 +212,14 @@ def test_no_fade_keeps_third_delta_flat(tmp_path):
     assert abs(float(avg_delta)) < 8.0
 
 
+# 6 weeks x 3 outings/day: dense enough that every place clusters well clear of
+# DBSCAN's MIN_SAMPLES floor, so the pause/no-pause twins land on identical place
+# counts for the right reason (pauses never enter clustering) rather than by a
+# borderline-cluster coincidence that shifts when fix coordinates change.
 def _pause_scenario(user_id: str = "pauser") -> Scenario:
     return Scenario(
-        user_id=user_id, seed=11, weeks=4, home_lat=52.52, home_lon=13.405,
-        outings_per_day=2, mean_outing_distance_m=900.0,
+        user_id=user_id, seed=11, weeks=6, home_lat=52.52, home_lon=13.405,
+        outings_per_day=3, mean_outing_distance_m=900.0,
         walk_speed_mps=1.1, pauses_per_walk=(2, 4), pause_start_week=0,
         end_dt=_GAIT_END,
     )
@@ -226,8 +230,8 @@ def pause_twin_dbs(tmp_path_factory):
     """Twin DBs differing only in pauses_per_walk: same seed/route geometry."""
     db_pause = _gait_db(tmp_path_factory.mktemp("pause"), _pause_scenario("pauser"))
     no_pause = Scenario(
-        user_id="walker", seed=11, weeks=4, home_lat=52.52, home_lon=13.405,
-        outings_per_day=2, mean_outing_distance_m=900.0,
+        user_id="walker", seed=11, weeks=6, home_lat=52.52, home_lon=13.405,
+        outings_per_day=3, mean_outing_distance_m=900.0,
         walk_speed_mps=1.1, end_dt=_GAIT_END,
     )
     db_plain = _gait_db(tmp_path_factory.mktemp("plain"), no_pause)

@@ -88,7 +88,7 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
                 distance_m=distance,
                 place_labels=place_labels,
             )
-            polyline = _walk_polyline(con, user_id, start_ts, end_ts)
+            polylines = _recent_walk_polylines(con, user_id)
             home = con.execute(
                 "SELECT median(lat), median(lon) FROM gps_fixes WHERE user_id = ?",
                 (user_id,),
@@ -100,7 +100,8 @@ def older_adult_home(db_path: Path, user_id: str) -> OlderAdultHome:
                 home_lat=home_lat,
                 home_lon=home_lon,
                 places=places,
-                walk_polyline=polyline,
+                walk_polyline=polylines[0] if polylines else [],
+                walk_polylines=polylines,
             )
 
         streak = _streak_days(con, user_id)
@@ -175,9 +176,11 @@ _SCHEMATIC_HOME_RADIUS_M = 60.0
 
 # The walk segmenter only counts fixes outside its 50 m home radius, so a walk's
 # start_ts/end_ts exclude the doorstep leg. Pad the fix query so the drawn route
-# reaches the home pin instead of floating ~50-70 m away. Outings are spaced
-# >= 15 min apart, so 2 min never bleeds into a neighbouring walk.
-_POLYLINE_PAD = dt.timedelta(minutes=2)
+# reaches the home pin instead of floating ~50-70 m away. Walking the near-home
+# spur out of that radius can take a few minutes, so 2 min sometimes still leaves a
+# line starting ~30 m out; 6 min reliably reaches the last at-home fix. Outings are
+# spaced >= 15 min apart, so 6 min never bleeds into a neighbouring walk.
+_POLYLINE_PAD = dt.timedelta(minutes=6)
 
 
 def _walk_polyline(
@@ -194,6 +197,33 @@ def _walk_polyline(
         """,
         (user_id, start_ts - _POLYLINE_PAD, end_ts + _POLYLINE_PAD),
     ).fetchall()
+
+
+_RECENT_WALK_DAYS = 7
+
+
+def _recent_walk_polylines(
+    con: duckdb.DuckDBPyConnection, user_id: str
+) -> list[list[tuple[float, float]]]:
+    """One polyline per walk over the last `_RECENT_WALK_DAYS` of *data* (anchored to
+    the user's most recent walk, since the demo data is pinned in the past), newest
+    first. The map layers these into a week of real loops instead of a single line."""
+    anchor = con.execute(
+        "SELECT max(start_ts) FROM walks WHERE user_id = ?", (user_id,)
+    ).fetchone()
+    if not anchor or anchor[0] is None:
+        return []
+    window_start = anchor[0] - dt.timedelta(days=_RECENT_WALK_DAYS)
+    walks = con.execute(
+        """
+        SELECT w.start_ts, w.end_ts FROM walks w
+        WHERE w.user_id = ? AND w.start_ts >= ?
+        ORDER BY w.start_ts DESC
+        """,
+        (user_id, window_start),
+    ).fetchall()
+    lines = [_walk_polyline(con, user_id, s, e) for s, e in walks]
+    return [ln for ln in lines if len(ln) > 1]
 
 
 def _top_places(
@@ -273,15 +303,15 @@ def _schematic_from_latest_walk(
     ).fetchone()
     if row is None:
         return None
-    _walk_id, start_ts, end_ts = row
-    polyline = _walk_polyline(con, user_id, start_ts, end_ts)
+    polylines = _recent_walk_polylines(con, user_id)
     home_lat, home_lon = _home_latlon(con, user_id)
     places = _top_places(con, user_id, home_lat, home_lon)
     return SchematicMap(
         home_lat=home_lat,
         home_lon=home_lon,
         places=places,
-        walk_polyline=polyline,
+        walk_polyline=polylines[0] if polylines else [],
+        walk_polylines=polylines,
     )
 
 

@@ -97,3 +97,12 @@ def test_schematic_walk_polyline_connects_to_home(populated_db: Path):
         home = (smap["home_lat"], smap["home_lon"])
         assert _hav_m(line[0], home) < 25.0, f"{url}: polyline start detached from home"
         assert _hav_m(line[-1], home) < 25.0, f"{url}: polyline end detached from home"
+
+        # Multi-walk layer: a week of walks, each a loop that starts AND ends home.
+        lines = smap["walk_polylines"]
+        assert len(lines) >= 1, f"{url}: expected recent walk polylines"
+        assert lines[0] == line, f"{url}: walk_polyline must be the newest of the layer"
+        for ln in lines:
+            assert len(ln) > 1
+            assert _hav_m(ln[0], home) < 25.0, f"{url}: a walk starts detached from home"
+            assert _hav_m(ln[-1], home) < 25.0, f"{url}: a walk ends detached from home"

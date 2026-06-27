@@ -6,6 +6,7 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { useEmbedSuffix } from "./embed";
 import { Ic } from "./Icon";
 import { LeafletMap } from "./LeafletMap";
 import { MapModal } from "./MapModal";
@@ -243,6 +244,7 @@ export function RelativeHeader({
   subtext,
   personaSlot,
   onProfile,
+  avatarName = "A",
 }: {
   greeting?: string;
   statusText?: string;
@@ -250,10 +252,22 @@ export function RelativeHeader({
   subtext?: ReactNode;
   personaSlot?: ReactNode;
   onProfile?: () => void;
+  avatarName?: string;
 }) {
+  const profileBtn = (
+    <button aria-label="Profil" onClick={onProfile} style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer" }}>
+      <Avatar name={avatarName} size={40} bg="rgba(255,255,255,0.22)" ring="rgba(255,255,255,0.35)" />
+    </button>
+  );
+
+  // Embed mode passes no personaSlot: skip the top row entirely and float the
+  // profile avatar top-right so the greeting rises to the top (no navy void).
+  const hasSlot = personaSlot != null;
+
   return (
     <div
       style={{
+        position: "relative",
         borderRadius: HIP.radius.card,
         background: HIP.heroGradient,
         boxShadow: HIP.shadow.hero,
@@ -261,14 +275,16 @@ export function RelativeHeader({
         padding: "16px 18px 20px",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        {personaSlot}
-        <button aria-label="Profil" onClick={onProfile} style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer" }}>
-          <Avatar name="A" size={40} bg="rgba(255,255,255,0.22)" ring="rgba(255,255,255,0.35)" />
-        </button>
-      </div>
+      {hasSlot ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          {personaSlot}
+          {profileBtn}
+        </div>
+      ) : (
+        <div style={{ position: "absolute", top: 16, right: 18 }}>{profileBtn}</div>
+      )}
 
-      <div style={{ marginTop: 18, fontSize: 15, color: c.onNavy70, fontWeight: 500 }}>{greeting}</div>
+      <div style={{ marginTop: hasSlot ? 18 : 0, fontSize: 15, color: c.onNavy70, fontWeight: 500 }}>{greeting}</div>
       <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <StatusPill tone={tone} size="lg">{statusText}</StatusPill>
       </div>
@@ -419,7 +435,7 @@ export function MapCard({
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick?.(); }}
           style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 10px 6px", cursor: onClick ? "pointer" : "default" }}
         >
-          <div style={{ fontSize: 13.5, color: c.textMuted }}>Letzte Route · zuletzt gesehen</div>
+          <div style={{ fontSize: 13.5, color: c.textMuted }}>Wege dieser Woche · zuletzt gesehen</div>
           <Ic name="chevron" size={18} color={c.textMuted} sw={2} />
         </div>
       </Card>
@@ -582,26 +598,29 @@ export function SlimNavyHeader({
   );
 }
 
-// ── Insight block (relative insights — question · verdict · viz) ──
-export function InsightBlock({
-  question,
-  verdict,
+// ── Calm insight card (Rückblicke language: noun label → headline + trend pill → viz) ──
+export function InsightCard({
+  label,
+  headline,
+  pill,
   children,
 }: {
-  question: ReactNode;
-  verdict: ReactNode;
-  children: ReactNode;
+  label: ReactNode;
+  headline: ReactNode;
+  pill?: ReactNode;
+  children?: ReactNode;
 }) {
   return (
-    <Card>
-      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: c.textMuted }}>
-        {question}
-      </div>
-      <div style={{ fontSize: 18, fontWeight: 600, color: c.textDark, lineHeight: 1.35, marginTop: 7, marginBottom: 18 }}>
-        {verdict}
-      </div>
-      {children}
-    </Card>
+    <>
+      <SectionLabel>{label}</SectionLabel>
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
+          <div style={{ fontSize: 18, fontWeight: 600, color: c.textDark, lineHeight: 1.35 }}>{headline}</div>
+          {pill && <div style={{ marginTop: 2 }}>{pill}</div>}
+        </div>
+        {children && <div style={{ marginTop: 18 }}>{children}</div>}
+      </Card>
+    </>
   );
 }
 
@@ -615,17 +634,18 @@ export function BottomTabBar({
 }) {
   const navigate = useNavigate();
   const userId = usePersona();
+  const e = useEmbedSuffix();
   const tabs: { id: string; label: string; icon: IconName; to: string }[] =
     mode === "older"
       ? [
-          { id: "home", label: "Start", icon: "house", to: `/older-adult?u=${userId}` },
-          { id: "stats", label: "Meine Woche", icon: "bars", to: `/older-adult/week?u=${userId}` },
-          { id: "profil", label: "Profil", icon: "shield", to: `/profil?u=${userId}&m=older` },
+          { id: "home", label: "Start", icon: "house", to: `/older-adult?u=${userId}${e}` },
+          { id: "stats", label: "Meine Woche", icon: "bars", to: `/older-adult/week?u=${userId}${e}` },
+          { id: "profil", label: "Profil", icon: "shield", to: `/profil?u=${userId}&m=older${e}` },
         ]
       : [
-          { id: "home", label: "Start", icon: "house", to: `/relative?u=${userId}` },
-          { id: "stats", label: "Einblicke", icon: "bars", to: `/relative/insights?u=${userId}` },
-          { id: "profil", label: "Profil", icon: "shield", to: `/profil?u=${userId}&m=relative` },
+          { id: "home", label: "Start", icon: "house", to: `/relative?u=${userId}${e}` },
+          { id: "stats", label: "Einblicke", icon: "bars", to: `/relative/insights?u=${userId}${e}` },
+          { id: "profil", label: "Profil", icon: "shield", to: `/profil?u=${userId}&m=relative${e}` },
         ];
   return (
     <div

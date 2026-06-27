@@ -85,6 +85,11 @@ def generate(scenario: Scenario, con: duckdb.DuckDBPyConnection) -> None:
     # main draw sequence bit-identical to pre-gait code, so route/place/changepoint
     # timing of existing personas does not drift.
     gait_rng = random.Random(f"{scenario.seed}-gait")
+    # Separate stream for all positional jitter (GPS noise on every fix). Isolating
+    # it keeps the main rng's *decision* draws (place picks, distances, dwell times)
+    # independent of route point-count, so changing route geometry (e.g. swapping a
+    # there-and-back retrace for a real loop) never perturbs change-point timing.
+    geo_rng = random.Random(f"{scenario.seed}-geo")
     rows: list[tuple[str, datetime, float, float, float]] = []
 
     start = scenario.start().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -119,7 +124,8 @@ def generate(scenario: Scenario, con: duckdb.DuckDBPyConnection) -> None:
             if next_free is not None and start_dt < next_free:
                 start_dt = next_free
             end_dt = _emit_outing(
-                rows, scenario, place, start_dt, decline_factor, rng, week_idx, gait_rng
+                rows, scenario, place, start_dt, decline_factor, rng, week_idx,
+                gait_rng, geo_rng,
             )
             outing_spans.append((start_dt, end_dt))
             next_free = end_dt + timedelta(minutes=15)
@@ -289,6 +295,7 @@ def _emit_outing(
     rng: random.Random,
     week_idx: int,
     gait_rng: random.Random,
+    geo_rng: random.Random,
 ) -> datetime:
     """Emit one outing's GPS fixes. Personas with baked street routes walk real
     OSM streets; everyone else falls back to the geometric arc model."""
@@ -299,11 +306,11 @@ def _emit_outing(
     if user_route is not None and place.label in user_route.get("places", {}):
         return _emit_outing_routed(
             rows, scenario, place, start_dt, decline_factor, rng, user_route,
-            week_idx, gait_rng, step_out_s, step_back_s,
+            week_idx, gait_rng, geo_rng, step_out_s, step_back_s,
         )
     return _emit_outing_arc(
         rows, scenario, place, start_dt, decline_factor, rng,
-        week_idx, gait_rng, step_out_s, step_back_s,
+        week_idx, gait_rng, geo_rng, step_out_s, step_back_s,
     )
 
 
@@ -317,46 +324,62 @@ def _emit_outing_routed(
     route: dict[str, Any],
     week_idx: int,
     gait_rng: random.Random,
+    geo_rng: random.Random,
     step_out_s: float,
     step_back_s: float,
 ) -> datetime:
-    """Walk real streets: a near-home block-loop spur pads the distance, then the
-    spine carries the user out to the snapped on-street place, dwell, and back.
+    """Walk real streets as a loop: out to the snapped place via one street, dwell,
+    then home via a *different* parallel street (the baked `back` leg). A near-home
+    block-loop spur pads the round trip to the target distance.
 
-    The dwell sits at the fixed spine endpoint regardless of distance/decline, so
-    the place clusters tightly and its pin stays put; distance and its weekly
-    decline come from how much of the loop spur gets walked, not from moving the
-    destination — keeping the activity radius small while the path length is large."""
-    spine = [(p[0], p[1]) for p in route["places"][place.label]]
+    The dwell sits at the fixed `out` endpoint regardless of distance/decline, so the
+    place clusters tightly and its pin stays put; distance and its weekly decline come
+    from how much of the loop spur gets walked, not from moving the destination —
+    keeping the activity radius small while the path length is large. The out and back
+    legs differ, so the outing renders as a real circuit, not a doubled line."""
+    legs = route["places"][place.label]
+    out_leg = [(p[0], p[1]) for p in legs["out"]]
+    back_leg = [(p[0], p[1]) for p in legs["back"]]
     loop = route["loop"]
-    spine_len = sum(_haversine_m(spine[i - 1], spine[i]) for i in range(1, len(spine)))
+    out_len = sum(_haversine_m(out_leg[i - 1], out_leg[i]) for i in range(1, len(out_leg)))
+    back_len = sum(
+        _haversine_m(back_leg[i - 1], back_leg[i]) for i in range(1, len(back_leg))
+    )
+    dest = out_leg[-1]
 
     round_trip_m = max(
         120.0,
         scenario.mean_outing_distance_m * decline_factor * rng.uniform(0.7, 1.3),
     )
-    oneway_m = round_trip_m / 2.0
 
-    # Pad spur: walk out along the block loop and back, so the spur starts and ends
-    # at home and joins the spine seamlessly. Its length tops up the spine to oneway.
-    pad_oneway = max(0.0, oneway_m - spine_len)
-    spur_out = _resample(loop, TRANSIT_STEP_M, pad_oneway / 2.0)
+    # Pad spur tops the two real legs up to the target round-trip length. The spur is
+    # walked out-and-back near home and appears at both ends of the circuit (start and
+    # finish), so it joins the legs seamlessly at the doorstep. Each of its two
+    # appearances contributes 2 * len(spur_out), hence the /4.
+    pad_total = max(0.0, round_trip_m - (out_len + back_len))
+    spur_out = _resample(loop, TRANSIT_STEP_M, pad_total / 4.0)
     spur = spur_out + list(reversed(spur_out))
-    spine_pts = _resample(spine, TRANSIT_STEP_M, spine_len)
-    if spine_pts[-1] != spine[-1]:
-        spine_pts.append(spine[-1])  # land exactly on the snapped destination
 
-    outbound = spur + spine_pts
-    dest = spine[-1]
+    out_pts = _resample(out_leg, TRANSIT_STEP_M, out_len)
+    if out_pts[-1] != dest:
+        out_pts.append(dest)  # land exactly on the snapped destination
+    back_pts = _resample(back_leg, TRANSIT_STEP_M, back_len)
+    if back_pts[-1] != back_leg[-1]:
+        back_pts.append(back_leg[-1])  # land exactly back home
 
-    pause_out, pause_back = _pause_plan(scenario, week_idx, len(outbound), gait_rng)
+    outbound = spur + out_pts  # home -> (spur) -> home -> dest
+    return_path = back_pts + list(reversed(spur))  # dest -> home -> (spur) -> home
+
+    # Pause indices must be valid for whichever leg they're applied to.
+    n_pause = min(len(outbound), len(return_path))
+    pause_out, pause_back = _pause_plan(scenario, week_idx, n_pause, gait_rng)
 
     def emit_ll(lat: float, lon: float, ts: datetime, jitter_m: float) -> None:
-        jlat = lat + rng.gauss(0, jitter_m) / METERS_PER_DEG_LAT
-        jlon = lon + rng.gauss(0, jitter_m) / (
+        jlat = lat + geo_rng.gauss(0, jitter_m) / METERS_PER_DEG_LAT
+        jlon = lon + geo_rng.gauss(0, jitter_m) / (
             METERS_PER_DEG_LAT * math.cos(math.radians(lat))
         )
-        rows.append((scenario.user_id, ts, jlat, jlon, rng.uniform(3.0, 8.0)))
+        rows.append((scenario.user_id, ts, jlat, jlon, geo_rng.uniform(3.0, 8.0)))
 
     t = start_dt
     for i, (lat, lon) in enumerate(outbound):
@@ -370,7 +393,7 @@ def _emit_outing_routed(
         emit_ll(dest[0], dest[1], t, 0.5)
         t += timedelta(seconds=DWELL_SAMPLE_S)
 
-    for i, (lat, lon) in enumerate(reversed(outbound)):
+    for i, (lat, lon) in enumerate(return_path):
         emit_ll(lat, lon, t, 1.5)
         t += timedelta(seconds=step_back_s)
         if i in pause_back:
@@ -387,6 +410,7 @@ def _emit_outing_arc(
     rng: random.Random,
     week_idx: int,
     gait_rng: random.Random,
+    geo_rng: random.Random,
     step_out_s: float,
     step_back_s: float,
 ) -> datetime:
@@ -424,14 +448,14 @@ def _emit_outing_arc(
         return x, y
 
     def emit(x_m: float, y_m: float, ts: datetime, jitter_m: float) -> None:
-        lat = scenario.home_lat + _m_to_deg_lat(y_m + rng.gauss(0, jitter_m))
+        lat = scenario.home_lat + _m_to_deg_lat(y_m + geo_rng.gauss(0, jitter_m))
         lon = scenario.home_lon + _m_to_deg_lon(
-            x_m + rng.gauss(0, jitter_m), scenario.home_lat
+            x_m + geo_rng.gauss(0, jitter_m), scenario.home_lat
         )
-        rows.append((scenario.user_id, ts, lat, lon, rng.uniform(3.0, 8.0)))
+        rows.append((scenario.user_id, ts, lat, lon, geo_rng.uniform(3.0, 8.0)))
 
     t = start_dt
-    out_sign = rng.choice((-1.0, 1.0))
+    out_sign = geo_rng.choice((-1.0, 1.0))
 
     pause_out, pause_back = _pause_plan(scenario, week_idx, n_steps + 1, gait_rng)
 

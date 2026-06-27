@@ -11,6 +11,7 @@ import {
 } from "../../shared/kit";
 import { kmLabel, durationMin } from "../../shared/labels";
 import { PersonaSwitcher } from "../../shared/PersonaSwitcher";
+import { useEmbed } from "../../shared/embed";
 import { personaName, usePersona } from "../../shared/persona";
 import { Shell } from "../../shared/Shell";
 import { ErrorState, LoadingState } from "../../shared/states";
@@ -24,6 +25,7 @@ const c = HIP.c;
 
 export default function OlderAdultHome() {
   const userId = usePersona();
+  const embed = useEmbed();
   const navigate = useNavigate();
   const { data, isLoading, isError } = useOlderAdultHome(userId);
 
@@ -36,13 +38,16 @@ export default function OlderAdultHome() {
   const km = walk ? kmLabel(walk.distance_m) : null;
   const hasStreak = data.streak_days > 0;
 
-  const goProfile = () => navigate(`/profil?u=${userId}&m=older`);
+  const e = embed ? "&embed=1" : "";
+  const goProfile = () => navigate(`/profil?u=${userId}&m=older${e}`);
 
   return (
     <Shell active="home" mode="older">
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -8 }}>
-        <PersonaSwitcher />
-      </div>
+      {!embed && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -8 }}>
+          <PersonaSwitcher />
+        </div>
+      )}
 
       <SectionLabel style={{ textTransform: "uppercase", letterSpacing: "0.12em", fontSize: 12, fontWeight: 700 }}>
         Mein Tag
@@ -55,26 +60,6 @@ export default function OlderAdultHome() {
         tagline={evening ? "Ein ruhiger Abend. Alles sieht gut aus." : "Heute schon alles im Grünen?"}
         avatar={name}
         onProfile={goProfile}
-        rightSlot={
-          <button
-            aria-label="Einstellungen"
-            onClick={goProfile}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: "50%",
-              border: "none",
-              background: c.navyGlass,
-              color: "#fff",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ic name="settings" size={21} color="#fff" />
-          </button>
-        }
       />
 
       <Card>
@@ -115,7 +100,7 @@ export default function OlderAdultHome() {
       {data.schematic_map && (
         <SchematicMap
           map={data.schematic_map}
-          onClick={() => navigate(`/older-adult/week?u=${userId}`)}
+          onClick={() => navigate(`/older-adult/week?u=${userId}${e}`)}
         />
       )}
 

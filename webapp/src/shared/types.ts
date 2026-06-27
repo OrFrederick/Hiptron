@@ -18,7 +18,10 @@ export interface SchematicMap {
   home_lat: number;
   home_lon: number;
   places: Place[];
+  // Most-recent walk (legacy single line; SVG fallback projection still uses it).
   walk_polyline: [number, number][];
+  // Every walk from the last 7 days, newest first. The live map layers these.
+  walk_polylines?: [number, number][][];
 }
 
 export interface OlderAdultHome {

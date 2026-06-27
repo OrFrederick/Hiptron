@@ -8,8 +8,13 @@ samples instead:
   * `loop`  — a short block loop near home (home -> 4 corners -> home). The generator
               walks part of this to pad an outing's distance while staying close to
               home (so the activity radius stays small but the path length is large).
-  * places  — for each named place, the foot route home -> destination. The route's
-              far end is the snapped, on-street dwell location for that place's pin.
+  * places  — for each named place, TWO real foot routes forming a circuit:
+                `out`  home -> destination, and
+                `back` destination -> home routed through a waypoint offset ~110 m
+                       perpendicular to the home->dest line, so OSRM returns home
+                       along a *parallel street* instead of retracing `out`.
+              The walk renders as a genuine loop, not a doubled there-and-back line.
+              Both legs share the snapped destination as the dwell pin.
 
 Run once (needs network); the result is committed as `routes.json` so `generate()`
 stays fully offline and deterministic. Re-run only if a persona's home or places move.
@@ -36,6 +41,12 @@ METERS_PER_DEG_LAT = 111_320.0
 # neighbourhood loop that stays well inside the 400 m activity-radius test bound.
 LOOP_RADIUS_M = 170.0
 LOOP_BEARINGS_DEG = (45.0, 135.0, 225.0, 315.0)
+
+# Perpendicular detour for the return leg: the dest->home route is pulled ~110 m to
+# the side of the outbound line so OSRM snaps it onto a parallel street, turning the
+# outing into a real loop. Kept small so the loop's farthest point stays well under
+# the 400 m activity-radius bound (max ≈ hypot(dest_dist/2, BACK_OFFSET_M)).
+BACK_OFFSET_M = 110.0
 
 
 def _offset(lat: float, lon: float, north_m: float, east_m: float) -> tuple[float, float]:
@@ -73,14 +84,31 @@ def bake() -> dict:
         loop = _osrm([home, *corners, home])
         time.sleep(1.0)
 
-        place_routes: dict[str, list[list[float]]] = {}
+        place_routes: dict[str, dict[str, list[list[float]]]] = {}
         # Dedupe by label so we issue one request per distinct place across personas.
         for p in places:
             if p.label in place_routes:
                 continue
-            dest = _offset(*home, p.lat_offset_m, p.lon_offset_m)
-            place_routes[p.label] = _osrm([home, dest])
+            north, east = p.lat_offset_m, p.lon_offset_m
+            dest = _offset(*home, north, east)
+            out_leg = _osrm([home, dest])
             time.sleep(1.0)
+
+            # Return leg via a point ~BACK_OFFSET_M to the left of the midpoint,
+            # perpendicular to the home->dest direction, so OSRM finds a parallel
+            # street home and the round trip reads as a loop. Unit perpendicular to
+            # (east, north) is (-north, east)/|..|.
+            dist_m = math.hypot(north, east) or 1.0
+            perp_n, perp_e = east / dist_m, -north / dist_m
+            via = _offset(
+                *home,
+                north / 2.0 + BACK_OFFSET_M * perp_n,
+                east / 2.0 + BACK_OFFSET_M * perp_e,
+            )
+            back_leg = _osrm([dest, via, home])
+            time.sleep(1.0)
+
+            place_routes[p.label] = {"out": out_leg, "back": back_leg}
 
         out[scn.user_id] = {
             "home": [home[0], home[1]],

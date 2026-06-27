@@ -348,6 +348,103 @@ export function PauseStat({ avg, direction }: { avg: number; direction: "up" | "
   );
 }
 
+// ── Generic "nice" axis max for non-km units (meters, counts) ──
+function niceMax(raw: number): number {
+  if (raw <= 0) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const steps = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+  for (const s of steps) if (s * pow >= raw) return s * pow;
+  return 10 * pow;
+}
+
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.`;
+}
+
+// ── Calm daily trend: smooth area + line over a soft "üblich" baseline ──
+// Replaces the dense per-day recharts bars. Sentence/verdict sits above it.
+export function TrendArea({
+  points,
+  baseline,
+  fmt,
+  color = c.blue600,
+  baselineLabel = "üblich",
+}: {
+  points: { date: string; value: number }[];
+  baseline: number;
+  fmt: (v: number) => string;
+  color?: string;
+  baselineLabel?: string;
+}) {
+  if (points.length < 2) return null;
+  const W = 324, H = 122, padL = 6, padR = 8, padT = 16, padB = 20;
+  const vals = points.map((p) => p.value);
+  const dataMax = Math.max(...vals, baseline);
+  const dataMin = Math.min(...vals, baseline);
+  // A near-constant series (e.g. steady outings) would pin its flat line to the
+  // top; give it extra headroom so it settles mid-card. Varying series keep a
+  // tight scale so meaningful steps (e.g. a lower radius) stay legible.
+  const lowVariance = dataMax > 0 && dataMax - dataMin < dataMax * 0.06;
+  const maxV = niceMax(dataMax * (lowVariance ? 1.6 : 1.08));
+  const x = (i: number) => padL + (i / (points.length - 1)) * (W - padL - padR);
+  const y = (v: number) => padT + (1 - v / maxV) * (H - padT - padB);
+  const linePts = points.map((p, i) => `${x(i)},${y(p.value)}`);
+  const line = linePts.join(" ");
+  const area = `${x(0)},${y(0)} ${line} ${x(points.length - 1)},${y(0)}`;
+  const gid = `ta-${color.replace("#", "")}`;
+  const baseY = y(baseline);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.2} />
+          <stop offset="100%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+
+      {/* soft "üblich" baseline */}
+      <line x1={padL} x2={W - padR} y1={baseY} y2={baseY} stroke={c.textMuted} strokeWidth={1.5} strokeDasharray="3 3" opacity={0.45} />
+      <text x={W - padR} y={baseY - 5} textAnchor="end" fontSize={10.5} fill={c.textMuted}>
+        {baselineLabel}
+      </text>
+
+      <polygon points={area} fill={`url(#${gid})`} />
+      <polyline points={line} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+
+      {/* scale + range hints */}
+      <text x={padL} y={11} fontSize={10.5} fill={c.textMuted}>{fmt(maxV)}</text>
+      <text x={padL} y={H - 5} fontSize={10.5} fill={c.textMuted}>{shortDate(points[0]!.date)}</text>
+      <text x={W - padR} y={H - 5} textAnchor="end" fontSize={10.5} fill={c.textMuted}>{shortDate(points[points.length - 1]!.date)}</text>
+    </svg>
+  );
+}
+
+// ── Quick-scan trend chip (mirrors the Patterns stat pills) ──
+export type Trend = { dir: "up" | "down" | "flat"; pct?: number };
+
+// Derive the chip from the block's verdict sentence so the two never disagree.
+export function trendFromVerdict(verdict: string): Trend | null {
+  if (/stabil|etwa gleich|unverändert/i.test(verdict)) return { dir: "flat" };
+  const m = verdict.match(/(\d+)\s*%/);
+  const down = /niedriger|weniger|kürzer|seltener|geringer/i.test(verdict);
+  const up = /höher|mehr|länger|öfter|größer/i.test(verdict);
+  if (m && (down || up)) return { dir: down ? "down" : "up", pct: Number(m[1]) };
+  return null;
+}
+
+export function TrendPill({ trend }: { trend: Trend }) {
+  const arrow = trend.dir === "up" ? "▲" : trend.dir === "down" ? "▼" : "→";
+  const tint = trend.dir === "flat" ? c.textMuted : c.blue600;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, color: tint, whiteSpace: "nowrap", flexShrink: 0 }}>
+      <span style={{ fontSize: 11 }}>{arrow}</span>
+      {trend.dir === "flat" ? "etwa gleich" : `${trend.pct}%`}
+    </span>
+  );
+}
+
 // ── Calm routine-consistency bar (reassurance, not a clinical dial) ──
 export function RoutineBar({ score, band }: { score: number; band: "stabil" | "wechselnd" }) {
   return (

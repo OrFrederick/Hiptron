@@ -54,6 +54,14 @@ def _features_for_walk(walk_id: str, fixes: list[Any]) -> tuple[Any, ...]:
     # distance/(duration-dwell) overstates speed on short walks with long dwells.
     transit_m = 0.0
     transit_s = 0.0
+    # Moving-speed samples only (dwell/pause fixes excluded). The first-vs-last-third
+    # fade metric runs on these, not on every fix: the mid-walk dwell contributes a
+    # large, variable block of ~0-speed fixes, and once the out/back legs differ in
+    # length (a real loop, not a there-and-back retrace) that block makes the thirds
+    # count-imbalanced and swamps the actual per-step slowdown. Transit-only thirds
+    # compare moving speed to moving speed, so a slower return leg reads as fade
+    # regardless of how the loop's legs are shaped.
+    transit_speeds: list[float] = []
 
     for i in range(1, len(fixes)):
         ts_a, lat_a, lon_a = fixes[i - 1]
@@ -74,6 +82,7 @@ def _features_for_walk(walk_id: str, fixes: list[Any]) -> tuple[Any, ...]:
             pause_run_s = 0.0
             transit_m += d
             transit_s += dt
+            transit_speeds.append(speed)
     if pause_run_s >= PAUSE_MIN_S:  # finalize a pause still open at walk end
         pause_count += 1
 
@@ -81,9 +90,10 @@ def _features_for_walk(walk_id: str, fixes: list[Any]) -> tuple[Any, ...]:
     mean_speed = total_dist / duration_s if duration_s > 0 else 0.0
     peak_speed = max(speeds) if speeds else 0.0
 
-    third = max(1, len(speeds) // 3)
-    first_third = speeds[:third]
-    last_third = speeds[-third:]
+    fade_speeds = transit_speeds if len(transit_speeds) >= 3 else speeds
+    third = max(1, len(fade_speeds) // 3)
+    first_third = fade_speeds[:third]
+    last_third = fade_speeds[-third:]
     avg_first = sum(first_third) / max(1, len(first_third))
     avg_last = sum(last_third) / max(1, len(last_third))
     speed_third_delta_pct = ((avg_last - avg_first) / avg_first * 100.0) if avg_first > 0 else 0.0

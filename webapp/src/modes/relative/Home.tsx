@@ -11,6 +11,7 @@ import {
 } from "../../shared/kit";
 import { kmLabel, placeLabel, relativeTimeDe } from "../../shared/labels";
 import { PersonaSwitcher } from "../../shared/PersonaSwitcher";
+import { useEmbed } from "../../shared/embed";
 import { personaName, usePersona } from "../../shared/persona";
 import { Shell } from "../../shared/Shell";
 import { ErrorState, LoadingState } from "../../shared/states";
@@ -39,6 +40,7 @@ function lastPlaceLabel(outings: WalkSummary[]): string | null {
 
 export default function RelativeHome() {
   const userId = usePersona();
+  const embed = useEmbed();
   const navigate = useNavigate();
   const { data, isLoading, isError } = useRelativeHome(userId);
 
@@ -46,6 +48,7 @@ export default function RelativeHome() {
   if (isError || !data) return <ErrorState />;
 
   const name = personaName(userId);
+  const e = embed ? "&embed=1" : "";
   const calm = data.status === "amber";
   const outings = data.recent_outings ?? [];
   const lastPlace = lastPlaceLabel(outings);
@@ -54,12 +57,13 @@ export default function RelativeHome() {
   return (
     <Shell active="home" mode="relative">
       <RelativeHeader
-        personaSlot={<PersonaSwitcher variant="navy" />}
+        personaSlot={embed ? undefined : <PersonaSwitcher variant="navy" />}
+        avatarName={name}
         greeting={greetingDe()}
         statusText={calm ? "Diese Woche etwas auffällig" : "Alles sieht gut aus"}
         tone={calm ? "amber" : "green"}
         subtext={data.summary}
-        onProfile={() => navigate(`/profil?u=${userId}&m=relative`)}
+        onProfile={() => navigate(`/profil?u=${userId}&m=relative${e}`)}
       />
 
       <SummaryRow data={data} lastPlace={lastPlace} />
@@ -69,7 +73,7 @@ export default function RelativeHome() {
           map={data.schematic_map}
           avatar={name}
           callout={callout}
-          onClick={() => navigate(`/relative/insights?u=${userId}`)}
+          onClick={() => navigate(`/relative/insights?u=${userId}${e}`)}
         />
       )}
 
@@ -78,7 +82,7 @@ export default function RelativeHome() {
       {data.worth_noticing && (
         <WorthNoticingCard
           item={data.worth_noticing}
-          onDetails={() => navigate(`/relative/insights?u=${userId}`)}
+          onDetails={() => navigate(`/relative/insights?u=${userId}${e}`)}
         />
       )}
 
@@ -96,13 +100,13 @@ export default function RelativeHome() {
                   text={places ? `Spaziergang über ${places}` : "Spaziergang"}
                   time={`${km.value} ${km.unit} · ${relativeTimeDe(o.end_ts)}`}
                   last={i === outings.length - 1}
-                  onClick={() => navigate(`/relative/insights?u=${userId}`)}
+                  onClick={() => navigate(`/relative/insights?u=${userId}${e}`)}
                 />
               );
             })}
           </Card>
           <button
-            onClick={() => navigate(`/relative/insights?u=${userId}`)}
+            onClick={() => navigate(`/relative/insights?u=${userId}${e}`)}
             style={{
               alignSelf: "center",
               background: "transparent",

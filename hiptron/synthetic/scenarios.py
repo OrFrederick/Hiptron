@@ -61,6 +61,38 @@ DEFAULT_PLACES = (
     NamedPlace("shop", 40.0, -90.0, 0.4, (1, 3, 5), 10),
 )
 
+def _relabel(
+    base: tuple[NamedPlace, ...], labels: tuple[str, ...]
+) -> tuple[NamedPlace, ...]:
+    """Rename a place constellation slot-by-slot, keeping every offset (and thus
+    the baked street route, distances, radius and clustering) untouched.
+
+    Each persona owns a distinct repertoire so no two maps share the same pins.
+    Only the *names* change: before this every persona reused one template, so all
+    four maps showed the same {bakery, park, doctor, friend, shop}. Offsets are
+    held fixed on purpose — the demo's change-points are tuned against this exact
+    geometry, and routes.json is keyed by these labels (rename both in lock-step).
+    """
+    return tuple(
+        NamedPlace(
+            label, p.lat_offset_m, p.lon_offset_m, p.visit_prob, p.typical_dow, p.typical_hour
+        )
+        for p, label in zip(base, labels, strict=True)
+    )
+
+
+# Per-persona repertoires: same role per slot (morning errand, midday leisure,
+# rare appointment, weekend social, shopping) as DEFAULT_PLACES/OTTO_PLACES, just
+# relabelled so each persona's map carries its own pins.
+HELGA_PLACES = DEFAULT_PLACES  # reference persona: keep the canonical labels
+INGRID_PLACES = _relabel(
+    DEFAULT_PLACES, ("cafe", "library", "optician", "neighbor", "market")
+)
+MARGARETE_PLACES = _relabel(
+    DEFAULT_PLACES, ("konditorei", "biergarten", "clinic", "daughter", "grocer")
+)
+
+
 # Otto's repertoire: five everyday spots, each reachable any weekday with high
 # visit probability, so a full week normally touches ~3-4 distinct places.
 # When the repertoire collapses (place_shrink_start_week) the daily distinct-place
@@ -70,12 +102,15 @@ DEFAULT_PLACES = (
 # collapses (place_shrink_start_week) otto's world contracts to one or two spots:
 # a recent place_count change-point, plus the natural knock-on of fewer/merged
 # outings and less distance — a coherent "withdrawing" picture for the caregiver.
-OTTO_PLACES = (
+OTTO_BASE = (
     NamedPlace("bakery", 80.0, 60.0, 1.0, (0, 1, 2, 3, 4, 5, 6), 9),
     NamedPlace("park", -50.0, 150.0, 1.0, (0, 1, 2, 3, 4, 5, 6), 11),
     NamedPlace("shop", 40.0, -90.0, 1.0, (0, 1, 2, 3, 4, 5, 6), 14),
     NamedPlace("friend", -180.0, -120.0, 1.0, (0, 1, 2, 3, 4, 5, 6), 16),
     NamedPlace("doctor", 200.0, -80.0, 1.0, (0, 1, 2, 3, 4, 5, 6), 10),
+)
+OTTO_PLACES = _relabel(
+    OTTO_BASE, ("bistro", "kiosk", "hardware", "sister", "pharmacy")
 )
 
 # Pinned "now" so the demo data is fully reproducible (the generator is otherwise
@@ -110,6 +145,7 @@ HELGA_SCENARIO = Scenario(
     distance_decline_pct_per_week=28.0,
     decline_start_week=10,
     end_dt=DEMO_END,
+    places=HELGA_PLACES,
     walk_speed_mps=1.15,
     speed_decline_pct_per_week=3.5,
     speed_decline_start_week=6,
@@ -143,6 +179,7 @@ MARGARETE_SCENARIO = Scenario(
     mean_outing_distance_m=1000.0,
     outings_decline_start_week=6,
     end_dt=DEMO_END,
+    places=MARGARETE_PLACES,
     walk_speed_mps=1.0,
     pauses_per_walk=(2, 4),
     pause_start_week=8,
@@ -159,6 +196,7 @@ INGRID_SCENARIO = Scenario(
     outings_per_day=2,
     mean_outing_distance_m=1300.0,
     end_dt=DEMO_END,
+    places=INGRID_PLACES,
     walk_speed_mps=1.25,
 )
 

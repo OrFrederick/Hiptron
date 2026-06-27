@@ -1,7 +1,10 @@
-import { PlaceBars } from "../../../shared/charts";
-import { InsightBlock } from "../../../shared/kit";
+import { PlaceBars, TrendPill, trendFromVerdict } from "../../../shared/charts";
+import { InsightCard } from "../../../shared/kit";
 import { placeLabel } from "../../../shared/labels";
+import { HIP } from "../../../shared/theme";
 import type { InsightBlock as InsightBlockData } from "../../../shared/types";
+
+const c = HIP.c;
 
 export function PlacesBlock({ block }: { block: InsightBlockData }) {
   const places = block.series
@@ -10,15 +13,16 @@ export function PlacesBlock({ block }: { block: InsightBlockData }) {
       count: Number(row.count ?? row.value ?? 0),
     }))
     .filter((p) => p.count > 0);
+  const trend = trendFromVerdict(block.verdict);
   return (
-    <InsightBlock question={block.question} verdict={block.verdict}>
+    <InsightCard label="Orte" headline={block.verdict} pill={trend && <TrendPill trend={trend} />}>
       {places.length > 0 ? (
         <PlaceBars places={places} />
       ) : (
-        <div style={{ fontSize: 15.5, color: "#6B7686", lineHeight: 1.5 }}>
+        <div style={{ fontSize: 15.5, color: c.textMuted, lineHeight: 1.5 }}>
           Noch keine festen Orte erkennbar.
         </div>
       )}
-    </InsightBlock>
+    </InsightCard>
   );
 }
