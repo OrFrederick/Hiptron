@@ -68,6 +68,8 @@ export default function RelativeHome() {
 
       <SummaryRow data={data} lastPlace={lastPlace} />
 
+      <WeeklyTrendCard trend={data.weekly_trend} />
+
       {data.schematic_map && (
         <MapCard
           map={data.schematic_map}
@@ -76,8 +78,6 @@ export default function RelativeHome() {
           onClick={() => navigate(`/relative/insights?u=${userId}${e}`)}
         />
       )}
-
-      <WeeklyTrendCard trend={data.weekly_trend} />
 
       {data.worth_noticing && (
         <WorthNoticingCard
