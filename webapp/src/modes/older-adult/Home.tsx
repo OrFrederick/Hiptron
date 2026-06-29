@@ -1,15 +1,14 @@
 import { useNavigate } from "react-router-dom";
 
+import { WeekBars } from "../../shared/charts";
 import { useOlderAdultHome } from "../../shared/api";
 import { Ic } from "../../shared/Icon";
 import {
   Card,
-  ChecklistRow,
   HeroCard,
   SectionLabel,
-  StatCard,
 } from "../../shared/kit";
-import { kmLabel, durationMin } from "../../shared/labels";
+import { kmLabel } from "../../shared/labels";
 import { PersonaSwitcher } from "../../shared/PersonaSwitcher";
 import { useEmbed } from "../../shared/embed";
 import { personaName, usePersona } from "../../shared/persona";
@@ -17,11 +16,10 @@ import { Shell } from "../../shared/Shell";
 import { ErrorState, LoadingState } from "../../shared/states";
 import { HIP } from "../../shared/theme";
 import type { Highlight } from "../../shared/types";
-import { FamilyNoteCard } from "./cards/FamilyNoteCard";
-import { TrendCard } from "./cards/TrendCard";
-import { SchematicMap } from "./SchematicMap";
+import { MotivationCard } from "./cards/MotivationCard";
 
 const c = HIP.c;
+const WEEKDAYS_DE = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
 export default function OlderAdultHome() {
   const userId = usePersona();
@@ -33,11 +31,7 @@ export default function OlderAdultHome() {
   if (isError || !data) return <ErrorState />;
 
   const name = personaName(userId);
-  const evening = data.greeting.includes("Abend");
-  const walk = data.yesterday_walk;
-  const km = walk ? kmLabel(walk.distance_m) : null;
-  const hasStreak = data.streak_days > 0;
-
+  const week = data.week_distances;
   const e = embed ? "&embed=1" : "";
   const goProfile = () => navigate(`/profil?u=${userId}&m=older${e}`);
 
@@ -49,77 +43,98 @@ export default function OlderAdultHome() {
         </div>
       )}
 
-      <SectionLabel style={{ textTransform: "uppercase", letterSpacing: "0.12em", fontSize: 12, fontWeight: 700 }}>
-        Mein Tag
-      </SectionLabel>
-
       <HeroCard
         greeting={`${data.greeting},`}
         name={name}
         statusText={data.status === "amber" ? "Etwas ruhiger zur Zeit" : "In Ordnung"}
-        tagline={evening ? "Ein ruhiger Abend. Alles sieht gut aus." : "Heute schon alles im Grünen?"}
+        tagline=""
         avatar={name}
         onProfile={goProfile}
       />
 
+      <MotivationCard status={data.status} />
+
+      {week && (
+        <>
+          <SectionLabel>Wochenübersicht</SectionLabel>
+          <Card>
+            <div style={{ fontSize: 17, color: c.textDark, lineHeight: 1.5 }}>
+              {(() => {
+                const activeDays = week.points.filter((p) => p.value > 0).length;
+                const avgM =
+                  week.points.length > 0
+                    ? week.points.reduce((sum, p) => sum + p.value, 0) / week.points.length
+                    : 0;
+                const avg = kmLabel(avgM);
+                return `An ${activeDays} von ${week.points.length} Tagen unterwegs · im Schnitt ${avg.value} ${avg.unit} am Tag.`;
+              })()}
+            </div>
+          </Card>
+        </>
+      )}
+
+      <SectionLabel>Monatsübersicht</SectionLabel>
       <Card>
-        <div style={{ fontSize: 18, fontWeight: 600, color: c.textDark, marginBottom: 6 }}>
-          {data.status === "amber" ? "So war deine Woche" : "Alles in Ordnung"}
-        </div>
-        <ChecklistRow icon="walk" tint={c.blue50} iconColor={c.blue600} label="Routine vorhanden" />
-        <ChecklistRow
-          icon="route"
-          tint={c.green50}
-          iconColor={c.green600}
-          label={walk && km ? `${km.value} ${km.unit} gestern unterwegs` : "Heute ein ruhiger Tag"}
-          last={!hasStreak}
-        />
-        {hasStreak && (
-          <ChecklistRow
-            icon="sun"
-            tint={c.amber50}
-            iconColor={c.amber600}
-            label={`${data.streak_days} Tage in Folge draußen`}
-            last
-          />
+        {week && week.points.length > 0 ? (
+          <>
+            <WeekBars
+              big
+              data={week.points.map((p) => p.value / 1000)}
+              days={week.points.map((p) => WEEKDAYS_DE[new Date(p.date).getDay()] ?? "")}
+              baseline={week.baseline_mean / 1000}
+              baselineLabel={`Monatsschnitt · ${kmLabel(week.baseline_mean).value} ${kmLabel(week.baseline_mean).unit}`}
+            />
+            <div style={{ fontSize: 13, color: c.textMuted, marginTop: 10, textAlign: "center" }}>
+              Balken = ein Tag · gestrichelt = Monatsschnitt
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 16, color: c.textMuted }}>Noch nicht genug Daten.</div>
         )}
       </Card>
 
-      {walk && km && (
-        <StatCard
-          title="Bewegung"
-          cells={[
-            { value: km.value, unit: km.unit, label: "gestern unterwegs" },
-            { value: String(durationMin(walk.start_ts, walk.end_ts)), unit: "min", label: "Spaziergang" },
-          ]}
-        />
+      {data.highlight && (
+        <>
+          <SectionLabel>Dein längster Spaziergang diese Woche</SectionLabel>
+          <HighlightCard highlight={data.highlight} />
+        </>
       )}
-
-      {data.highlight && <HighlightCard highlight={data.highlight} />}
-
-      {data.schematic_map && (
-        <SchematicMap
-          map={data.schematic_map}
-          onClick={() => navigate(`/older-adult/week?u=${userId}${e}`)}
-        />
-      )}
-
-      <FamilyNoteCard note={data.family_note} />
-      <TrendCard text={data.trend_card} />
     </Shell>
   );
 }
 
 function HighlightCard({ highlight }: { highlight: Highlight }) {
-  const icon = highlight.kind === "new_place" ? "pin" : highlight.kind === "furthest" ? "route" : "walk";
+  const icon =
+    highlight.kind === "new_place"
+      ? "pin"
+      : highlight.kind === "furthest"
+        ? "route"
+        : "walk";
   return (
     <Card style={{ display: "flex", alignItems: "center", gap: 14, minHeight: 72 }}>
-      <span style={{ width: 46, height: 46, borderRadius: "50%", background: c.green50, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <span
+        style={{
+          width: 46,
+          height: 46,
+          borderRadius: "50%",
+          background: c.green50,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
         <Ic name={icon} size={22} color={c.green600} sw={2} />
       </span>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: c.textDark, lineHeight: 1.3 }}>{highlight.text}</div>
-        {highlight.detail && <div style={{ fontSize: 16, color: c.textMuted, marginTop: 3 }}>{highlight.detail}</div>}
+        <div style={{ fontSize: 18, fontWeight: 700, color: c.textDark, lineHeight: 1.3 }}>
+          {highlight.text}
+        </div>
+        {highlight.detail && (
+          <div style={{ fontSize: 18, color: c.textMuted, marginTop: 4, lineHeight: 1.3 }}>
+            {highlight.detail}
+          </div>
+        )}
       </div>
     </Card>
   );
