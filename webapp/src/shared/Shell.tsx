@@ -37,9 +37,11 @@ export function Shell({ children, active = "home", mode = "older" }: Props) {
           {children}
         </div>
       </div>
-      <div style={{ position: "sticky", bottom: 0, maxWidth: 420, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
-        <BottomTabBar active={active} mode={mode} />
-      </div>
+      {mode !== "older" && (
+        <div style={{ position: "sticky", bottom: 0, maxWidth: 420, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+          <BottomTabBar active={active} mode={mode} />
+        </div>
+      )}
     </div>
   );
 }
