@@ -639,8 +639,6 @@ export function BottomTabBar({
     mode === "older"
       ? [
           { id: "home", label: "Start", icon: "house", to: `/older-adult?u=${userId}${e}` },
-          { id: "stats", label: "Meine Woche", icon: "bars", to: `/older-adult/week?u=${userId}${e}` },
-          { id: "profil", label: "Profil", icon: "shield", to: `/profil?u=${userId}&m=older${e}` },
         ]
       : [
           { id: "home", label: "Start", icon: "house", to: `/relative?u=${userId}${e}` },
