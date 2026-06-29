@@ -66,6 +66,13 @@ export default function RelativeHome() {
         onProfile={() => navigate(`/profil?u=${userId}&m=relative${e}`)}
       />
 
+      {data.worth_noticing && (
+        <WorthNoticingCard
+          item={data.worth_noticing}
+          onDetails={() => navigate(`/relative/insights?u=${userId}${e}`)}
+        />
+      )}
+
       <SummaryRow data={data} lastPlace={lastPlace} />
 
       <WeeklyTrendCard trend={data.weekly_trend} />
@@ -76,13 +83,6 @@ export default function RelativeHome() {
           avatar={name}
           callout={callout}
           onClick={() => navigate(`/relative/insights?u=${userId}${e}`)}
-        />
-      )}
-
-      {data.worth_noticing && (
-        <WorthNoticingCard
-          item={data.worth_noticing}
-          onDetails={() => navigate(`/relative/insights?u=${userId}${e}`)}
         />
       )}
 
